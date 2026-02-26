@@ -63,20 +63,6 @@ git clone https://github.com/nathanzbl/Survivor50Draft.git
 cd Survivor50Draft
 ```
 
----
-
-## Step 5: Create the .env File
-
-The `.env` is gitignored, so create it on the server:
-
-```bash
-cat > backend/.env << 'EOF'
-DATABASE_URL=postgresql://postgres:survivor50admin@survivor-50-draft-challenge.cduiqimmkaym.us-west-1.rds.amazonaws.com:5432/survivor50
-ADMIN_PASSWORD=survivor50admin
-JWT_SECRET=survivor50-draft-league-secret-key-2026
-PORT=3001
-EOF
-```
 
 ---
 
