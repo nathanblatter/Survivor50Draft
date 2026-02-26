@@ -1,0 +1,17 @@
+node_modules
+backend/node_modules
+frontend/node_modules
+backend/dist
+frontend/dist
+.env
+backend/.env
+.git
+.gitignore
+.claude
+.DS_Store
+*.log
+deploy
+deploy.md
+docker-compose.yml
+Dockerfile
+.dockerignore
