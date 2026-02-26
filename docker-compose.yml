@@ -26,10 +26,21 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/survivor50
-      ADMIN_PASSWORD: changeme
-      JWT_SECRET: your-secret-key-change-this
+      ADMIN_PASSWORD: survivor50admin
+      JWT_SECRET: survivor50-draft-league-secret-key-2026
       PORT: 3001
       # ANTHROPIC_API_KEY: your-api-key-here
+
+  # One-off seed runner: docker compose run --rm seed
+  seed:
+    build: .
+    profiles: ["tools"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/survivor50
+    command: ["node", "backend/dist/seed.js"]
 
 volumes:
   pgdata:
