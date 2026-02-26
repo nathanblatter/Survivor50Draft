@@ -10,7 +10,15 @@ router.get('/', async (_req: Request, res: Response) => {
       SELECT p.*, tp.team_id,
         COALESCE(
           (SELECT SUM(se.points) FROM scoring_events se WHERE se.player_id = p.id), 0
-        ) as total_points
+        ) as total_points,
+        COALESCE(
+          (SELECT json_agg(json_build_object(
+            'tribe_name', th.tribe_name,
+            'phase', th.phase,
+            'episode', th.episode
+          ) ORDER BY th.id) FROM tribe_history th WHERE th.player_id = p.id),
+          '[]'::json
+        ) as tribe_history
       FROM players p
       LEFT JOIN team_players tp ON tp.player_id = p.id
       ORDER BY p.tribe, p.name

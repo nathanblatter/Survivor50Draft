@@ -71,6 +71,25 @@ export async function initDB() {
         snake_draft BOOLEAN DEFAULT TRUE,
         updated_at TIMESTAMP DEFAULT NOW()
       );
+
+      CREATE TABLE IF NOT EXISTS tribes (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(50) NOT NULL UNIQUE,
+        color VARCHAR(7) NOT NULL,
+        phase VARCHAR(20) NOT NULL DEFAULT 'original',
+        introduced_episode INTEGER,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS tribe_history (
+        id SERIAL PRIMARY KEY,
+        player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
+        tribe_name VARCHAR(50) NOT NULL,
+        phase VARCHAR(20) NOT NULL,
+        episode INTEGER,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
     `);
     console.log('Database tables initialized');
   } finally {

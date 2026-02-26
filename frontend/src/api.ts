@@ -40,6 +40,8 @@ export const api = {
   getTeam: (id: number) => request<any>(`/teams/${id}`),
   createTeam: (data: { name: string; owner_name: string; draft_order?: number }) =>
     request<any>('/teams', { method: 'POST', body: JSON.stringify(data) }),
+  updateTeam: (id: number, data: { name?: string; owner_name?: string }) =>
+    request<any>(`/teams/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteTeam: (id: number) => request<any>(`/teams/${id}`, { method: 'DELETE' }),
 
   // Draft
@@ -52,6 +54,11 @@ export const api = {
 
   // Scoring
   getScoringRules: () => request<any[]>('/scoring/rules'),
+  createScoringRule: (data: { event_type: string; points: number; description: string; is_variable?: boolean }) =>
+    request<any>('/scoring/rules', { method: 'POST', body: JSON.stringify(data) }),
+  updateScoringRule: (id: number, data: { event_type?: string; points?: number; description?: string; is_variable?: boolean }) =>
+    request<any>(`/scoring/rules/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteScoringRule: (id: number) => request<any>(`/scoring/rules/${id}`, { method: 'DELETE' }),
   getScoringEvents: (limit?: number) => request<any[]>(`/scoring/events?limit=${limit || 50}`),
   addScoringEvent: (data: {
     player_id: number; event_type: string; episode?: number; notes?: string; custom_points?: number;
@@ -60,4 +67,24 @@ export const api = {
   addBulkScoringEvents: (data: {
     player_ids: number[]; event_type: string; episode?: number; notes?: string;
   }) => request<any[]>('/scoring/events/bulk', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Summary
+  getEpisodesWithEvents: () => request<{ episode: number; event_count: number }[]>('/summary/episodes'),
+  getEpisodeEvents: (episode: number) => request<any[]>(`/summary/episodes/${episode}`),
+  generateEpisodeSummary: (episode: number) =>
+    request<{ episode: number; summary: string; event_count: number }>('/summary/generate', {
+      method: 'POST', body: JSON.stringify({ episode }),
+    }),
+
+  // Tribes
+  getTribes: () => request<any[]>('/tribes'),
+  createTribe: (data: { name: string; color: string; phase?: string; introduced_episode?: number }) =>
+    request<any>('/tribes', { method: 'POST', body: JSON.stringify(data) }),
+  performSwap: (data: {
+    episode: number;
+    assignments: { player_id: number; tribe_name: string }[];
+    new_tribes?: { name: string; color: string }[];
+  }) => request<any>('/tribes/swap', { method: 'POST', body: JSON.stringify(data) }),
+  performMerge: (data: { episode: number; tribe_name: string; tribe_color: string }) =>
+    request<any>('/tribes/merge', { method: 'POST', body: JSON.stringify(data) }),
 };

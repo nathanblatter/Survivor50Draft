@@ -1,10 +1,5 @@
 import { Player } from '../types';
-
-const TRIBE_COLORS: Record<string, string> = {
-  Cila: '#E87830',
-  Kalo: '#4AC8D9',
-  Vatu: '#D06CC0',
-};
+import { useTribes } from '../context/TribeContext';
 
 function getInitials(name: string): string {
   return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
@@ -19,8 +14,11 @@ interface PlayerCardProps {
 }
 
 export default function PlayerCard({ player, onClick, selected, compact, showScore }: PlayerCardProps) {
-  const tribeColor = TRIBE_COLORS[player.tribe] || '#D4A843';
+  const { getTribeColor } = useTribes();
+  const tribeColor = getTribeColor(player.tribe);
   const displayName = player.nickname || player.name.split(' ')[0];
+  const history = player.tribe_history || [];
+  const hasMultipleTribes = history.length > 1;
 
   return (
     <div
@@ -40,7 +38,25 @@ export default function PlayerCard({ player, onClick, selected, compact, showSco
         <div className="player-name">{compact ? displayName : player.name}</div>
         {!compact && (
           <>
-            <div className="player-tribe" style={{ color: tribeColor }}>{player.tribe}</div>
+            <div className="player-tribe" style={{ color: tribeColor }}>
+              {player.tribe}
+              {hasMultipleTribes && (
+                <span
+                  className="tribe-history-dots"
+                  title={history.map(h =>
+                    `${h.tribe_name} (${h.phase}${h.episode ? ` Ep.${h.episode}` : ''})`
+                  ).join(' → ')}
+                >
+                  {history.map((h, i) => (
+                    <span
+                      key={i}
+                      className="tribe-dot"
+                      style={{ backgroundColor: getTribeColor(h.tribe_name) }}
+                    />
+                  ))}
+                </span>
+              )}
+            </div>
             <div className="player-seasons">S{player.original_seasons}</div>
           </>
         )}

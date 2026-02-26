@@ -2,16 +2,12 @@ import { useEffect, useState, useCallback } from 'react';
 import { api } from '../api';
 import { Player, Team } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useTribes } from '../context/TribeContext';
 import PlayerCard from '../components/PlayerCard';
-
-const TRIBE_COLORS: Record<string, string> = {
-  Cila: '#E87830',
-  Kalo: '#4AC8D9',
-  Vatu: '#D06CC0',
-};
 
 export default function DraftPage() {
   const { isAdmin } = useAuth();
+  const { activeTribes, getTribeColor } = useTribes();
   const [players, setPlayers] = useState<Player[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<number>(() => {
@@ -195,14 +191,14 @@ export default function DraftPage() {
           </div>
           <div className="tribe-filters">
             <button className={`tribe-filter ${tribeFilter === 'all' ? 'active' : ''}`} onClick={() => setTribeFilter('all')}>All</button>
-            {['Cila', 'Kalo', 'Vatu'].map(t => (
+            {activeTribes.map(tribe => (
               <button
-                key={t}
-                className={`tribe-filter ${tribeFilter === t ? 'active' : ''}`}
-                onClick={() => setTribeFilter(t)}
-                style={{ '--tribe-color': TRIBE_COLORS[t] } as React.CSSProperties}
+                key={tribe.name}
+                className={`tribe-filter ${tribeFilter === tribe.name ? 'active' : ''}`}
+                onClick={() => setTribeFilter(tribe.name)}
+                style={{ '--tribe-color': tribe.color } as React.CSSProperties}
               >
-                {t}
+                {tribe.name}
               </button>
             ))}
           </div>
@@ -240,10 +236,10 @@ export default function DraftPage() {
                     <div className="draft-empty-slot">No picks yet</div>
                   ) : (
                     team.players.map((p: any, idx: number) => (
-                      <div key={p.id} className="draft-pick-item" style={{ borderLeftColor: TRIBE_COLORS[p.tribe] || '#D4A843' }}>
+                      <div key={p.id} className="draft-pick-item" style={{ borderLeftColor: getTribeColor(p.tribe) }}>
                         <span className="draft-pick-num">#{idx + 1}</span>
                         <span className="draft-pick-name">{p.name}</span>
-                        <span className="draft-pick-tribe" style={{ color: TRIBE_COLORS[p.tribe] }}>{p.tribe}</span>
+                        <span className="draft-pick-tribe" style={{ color: getTribeColor(p.tribe) }}>{p.tribe}</span>
                         {isAdmin && (
                           <button onClick={() => handleUndoPick(p.id)} className="btn-icon delete-btn" title="Undo">✕</button>
                         )}

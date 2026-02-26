@@ -1,3 +1,18 @@
+export interface TribeHistoryEntry {
+  tribe_name: string;
+  phase: string;
+  episode: number | null;
+}
+
+export interface Tribe {
+  id: number;
+  name: string;
+  color: string;
+  phase: string;
+  introduced_episode: number | null;
+  is_active: boolean;
+}
+
 export interface Player {
   id: number;
   name: string;
@@ -9,6 +24,7 @@ export interface Player {
   placement: number | null;
   total_points: number;
   team_id: number | null;
+  tribe_history?: TribeHistoryEntry[];
 }
 
 export interface Team {

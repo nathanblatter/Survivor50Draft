@@ -64,6 +64,8 @@ async function seed() {
     await client.query('BEGIN');
 
     // Clear existing data
+    await client.query('DELETE FROM tribe_history');
+    await client.query('DELETE FROM tribes');
     await client.query('DELETE FROM scoring_events');
     await client.query('DELETE FROM team_players');
     await client.query('DELETE FROM teams');
@@ -88,6 +90,30 @@ async function seed() {
       );
     }
     console.log(`Inserted ${scoringRules.length} scoring rules`);
+
+    // Insert original tribes
+    const originalTribes = [
+      { name: 'Cila', color: '#E87830' },
+      { name: 'Kalo', color: '#4AC8D9' },
+      { name: 'Vatu', color: '#D06CC0' },
+    ];
+    for (const tribe of originalTribes) {
+      await client.query(
+        'INSERT INTO tribes (name, color, phase, introduced_episode) VALUES ($1, $2, $3, $4)',
+        [tribe.name, tribe.color, 'original', 1]
+      );
+    }
+    console.log('Inserted 3 original tribes');
+
+    // Insert tribe history for each player
+    const allPlayers = await client.query('SELECT id, tribe FROM players');
+    for (const p of allPlayers.rows) {
+      await client.query(
+        'INSERT INTO tribe_history (player_id, tribe_name, phase, episode) VALUES ($1, $2, $3, $4)',
+        [p.id, p.tribe, 'original', 1]
+      );
+    }
+    console.log('Inserted tribe history for all players');
 
     // Initialize draft state
     await client.query(

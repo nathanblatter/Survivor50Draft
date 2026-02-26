@@ -1,0 +1,20 @@
+{
+  "name": "survivor50-draft",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Survivor 50 Fantasy Draft League",
+  "scripts": {
+    "dev": "concurrently -k -n BE,FE -c cyan,magenta \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build": "npm run build:frontend && npm run build:backend",
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+    "start": "cd backend && npm start",
+    "seed": "cd backend && npm run seed",
+    "install:all": "cd backend && npm install && cd ../frontend && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

@@ -8,6 +8,8 @@ import playersRouter from './routes/players';
 import teamsRouter from './routes/teams';
 import draftRouter from './routes/draft';
 import scoringRouter from './routes/scoring';
+import summaryRouter from './routes/summary';
+import tribesRouter from './routes/tribes';
 
 dotenv.config();
 
@@ -23,6 +25,8 @@ app.use('/api/players', playersRouter);
 app.use('/api/teams', teamsRouter);
 app.use('/api/draft', draftRouter);
 app.use('/api/scoring', scoringRouter);
+app.use('/api/summary', summaryRouter);
+app.use('/api/tribes', tribesRouter);
 
 // Serve static frontend in production
 const frontendPath = path.join(__dirname, '../../frontend/dist');

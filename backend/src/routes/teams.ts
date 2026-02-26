@@ -104,6 +104,35 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
+router.patch('/:id', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { name, owner_name } = req.body;
+    if (!name && !owner_name) {
+      res.status(400).json({ error: 'Provide name or owner_name to update' });
+      return;
+    }
+    const fields: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+    if (name) { fields.push(`name = $${idx++}`); values.push(name); }
+    if (owner_name) { fields.push(`owner_name = $${idx++}`); values.push(owner_name); }
+    values.push(id);
+    const result = await pool.query(
+      `UPDATE teams SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
+      values
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Team not found' });
+      return;
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update team' });
+  }
+});
+
 router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;

@@ -14,6 +14,78 @@ router.get('/rules', async (_req: Request, res: Response) => {
   }
 });
 
+router.post('/rules', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { event_type, points, description, is_variable } = req.body;
+    if (!event_type || points === undefined || !description) {
+      res.status(400).json({ error: 'event_type, points, and description are required' });
+      return;
+    }
+    const result = await pool.query(
+      'INSERT INTO scoring_rules (event_type, points, description, is_variable) VALUES ($1, $2, $3, $4) RETURNING *',
+      [event_type, points, description, is_variable || false]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err: any) {
+    if (err.code === '23505') {
+      res.status(400).json({ error: 'A rule with that event type already exists' });
+      return;
+    }
+    console.error(err);
+    res.status(500).json({ error: 'Failed to create scoring rule' });
+  }
+});
+
+router.patch('/rules/:id', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { event_type, points, description, is_variable } = req.body;
+    const fields: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+    if (event_type !== undefined) { fields.push(`event_type = $${idx++}`); values.push(event_type); }
+    if (points !== undefined) { fields.push(`points = $${idx++}`); values.push(points); }
+    if (description !== undefined) { fields.push(`description = $${idx++}`); values.push(description); }
+    if (is_variable !== undefined) { fields.push(`is_variable = $${idx++}`); values.push(is_variable); }
+    if (fields.length === 0) {
+      res.status(400).json({ error: 'Provide at least one field to update' });
+      return;
+    }
+    values.push(id);
+    const result = await pool.query(
+      `UPDATE scoring_rules SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
+      values
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Scoring rule not found' });
+      return;
+    }
+    res.json(result.rows[0]);
+  } catch (err: any) {
+    if (err.code === '23505') {
+      res.status(400).json({ error: 'A rule with that event type already exists' });
+      return;
+    }
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update scoring rule' });
+  }
+});
+
+router.delete('/rules/:id', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('DELETE FROM scoring_rules WHERE id = $1 RETURNING *', [id]);
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Scoring rule not found' });
+      return;
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to delete scoring rule' });
+  }
+});
+
 router.get('/events', async (req: Request, res: Response) => {
   try {
     const { limit = 50 } = req.query;
