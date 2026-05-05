@@ -587,7 +587,7 @@ a:hover { color: var(--gold-bright); }
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: top center;
+  object-position: center 20%;
 }
 .avatar-initials {
   font-family: var(--font-display);
@@ -979,6 +979,69 @@ a:hover { color: var(--gold-bright); }
   padding: 0.5rem;
   background: var(--bg-input);
   border-radius: var(--radius);
+}
+/* Challenge tab */
+.challenge-type-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+.challenge-type-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 1rem 0.75rem;
+  background: var(--bg-card);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.challenge-type-btn:hover { border-color: var(--gold); }
+.challenge-type-btn.active {
+  border-color: var(--gold);
+  background: rgba(212, 168, 67, 0.1);
+}
+.challenge-type-label {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  letter-spacing: 0.5px;
+}
+.challenge-type-sub {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+.challenge-tribe-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.tribe-pill {
+  padding: 0.4rem 1rem;
+  border-radius: 999px;
+  border: 2px solid var(--tribe-color, var(--border));
+  background: transparent;
+  color: var(--tribe-color, var(--text-primary));
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.tribe-pill.selected {
+  background: var(--tribe-color, var(--gold));
+  color: #000;
+}
+.pts-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: 0.4rem;
+}
+.label-hint {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: normal;
+  margin-left: 0.4rem;
 }
 .recent-events h3 {
   font-family: var(--font-display);
@@ -1571,6 +1634,35 @@ a:hover { color: var(--gold-bright); }
 .eliminate-summary strong {
   color: var(--text-primary);
 }
+.additional-vote-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.6rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 0.4rem;
+  font-size: 0.85rem;
+}
+.btn-remove-vote {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0 0.25rem;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+.btn-remove-vote:hover { color: var(--danger); }
+.additional-vote-add {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+.additional-vote-add .form-input { flex: 1; }
+.vote-count-input { max-width: 90px !important; flex: 0 0 auto !important; }
 .modal-actions {
   display: flex;
   gap: 0.75rem;
@@ -1897,6 +1989,476 @@ a:hover { color: var(--gold-bright); }
 }
 
 /* ============================================================
+   GAME STATE PAGE
+   ============================================================ */
+.gamestate-page { max-width: 1000px; margin: 0 auto; }
+
+.gs-empty {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--text-secondary);
+}
+.gs-empty-icon { font-size: 4rem; margin-bottom: 1rem; }
+.gs-empty-sub { color: var(--text-muted); margin-top: 0.5rem; font-size: 0.9rem; }
+
+.gs-section { margin-bottom: 3rem; }
+.gs-section-title {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: var(--gold);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.gs-section-icon { font-size: 1.4rem; }
+.gs-count {
+  margin-left: auto;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* ── Idol Cards ── */
+.gs-idol-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1.25rem;
+}
+.gs-idol-card {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  text-align: center;
+  overflow: hidden;
+  transition: all 0.3s;
+}
+.gs-idol-card:hover {
+  border-color: var(--tc);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 20px color-mix(in srgb, var(--tc) 20%, transparent);
+}
+.gs-idol-glow {
+  position: absolute;
+  top: -40%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--tc) 15%, transparent) 0%, transparent 70%);
+  pointer-events: none;
+  animation: idol-pulse 3s ease-in-out infinite;
+}
+@keyframes idol-pulse {
+  0%, 100% { opacity: 0.5; transform: translateX(-50%) scale(1); }
+  50% { opacity: 1; transform: translateX(-50%) scale(1.15); }
+}
+/* Idol photo */
+.gs-idol-photo {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 0.75rem;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid var(--tc);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--tc) 30%, transparent);
+}
+.gs-idol-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 20%;
+}
+.gs-idol-initials {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--tc), color-mix(in srgb, var(--tc) 60%, #000));
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #fff;
+}
+.gs-idol-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  font-size: 1.3rem;
+  background: var(--bg-card);
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--border);
+}
+.gs-idol-player {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 1px;
+}
+.gs-idol-tribe {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 0.5rem;
+}
+.gs-idol-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.25rem;
+}
+.gs-idol-ep {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.gs-idol-notes {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-top: 0.25rem;
+}
+.gs-idol-status {
+  display: inline-block;
+  margin-top: 0.75rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 100px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.gs-idol-status.active {
+  background: rgba(76, 175, 80, 0.15);
+  color: var(--positive);
+  border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
+/* ── Advantage Cards ── */
+.gs-advantage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1.25rem;
+}
+.gs-advantage-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  transition: all 0.3s;
+  border-left: 3px solid var(--fire-orange);
+}
+.gs-advantage-card:hover {
+  border-color: var(--fire-orange);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(255, 107, 53, 0.15);
+}
+.gs-advantage-top {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+.gs-advantage-photo {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 2px solid var(--fire-orange);
+  box-shadow: 0 0 12px rgba(255, 107, 53, 0.2);
+}
+.gs-advantage-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 20%;
+}
+.gs-advantage-initials {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--fire-orange), #c44a1a);
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+}
+.gs-advantage-info { flex: 1; }
+.gs-advantage-type {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--fire-orange);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 0.1rem;
+}
+.gs-advantage-player {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.gs-advantage-tribe {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+.gs-advantage-ep {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.gs-advantage-notes {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-top: 0.25rem;
+}
+
+/* ── Played / Used Items ── */
+.gs-played-section { margin-top: 1.5rem; }
+.gs-played-title {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 0.75rem;
+}
+.gs-played-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.gs-played-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  opacity: 0.6;
+  font-size: 0.9rem;
+}
+.gs-played-icon { font-size: 1rem; }
+.gs-played-photo {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center 20%;
+  flex-shrink: 0;
+}
+.gs-played-name { font-weight: 600; }
+.gs-played-detail { color: var(--text-secondary); }
+.gs-played-notes { color: var(--text-muted); font-style: italic; }
+
+/* ── Alliance Cards ── */
+.gs-alliance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.5rem;
+}
+.gs-alliance-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  transition: all 0.3s;
+}
+.gs-alliance-card:hover {
+  border-color: var(--gold);
+  box-shadow: 0 6px 24px rgba(212, 168, 67, 0.1);
+}
+.gs-alliance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.5rem;
+}
+.gs-alliance-name {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--gold);
+  letter-spacing: 1px;
+}
+.gs-alliance-ep {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.gs-alliance-notes {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+  font-style: italic;
+}
+.gs-alliance-members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+.gs-alliance-member {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 70px;
+  position: relative;
+}
+.gs-alliance-member.eliminated { opacity: 0.4; }
+.gs-member-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s;
+  overflow: hidden;
+  border: 2px solid;
+  background: var(--bg-card);
+}
+.gs-member-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 20%;
+}
+.gs-alliance-member:hover .gs-member-avatar { transform: scale(1.1); }
+.gs-member-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.2;
+}
+.gs-member-tribe {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.gs-member-multi {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--fire-orange);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* ── Alliance Strength Bar ── */
+.gs-alliance-strength {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+.gs-strength-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.gs-strength-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--positive), var(--gold));
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+.gs-strength-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ── Alliance Web ── */
+.gs-web-section { margin-top: 1.5rem; }
+.gs-web {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+  padding: 1.5rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.gs-web-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.gs-web-player {
+  padding: 0.4rem 1rem;
+  border: 2px solid;
+  border-radius: 100px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.gs-web-photo {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center 20%;
+}
+.gs-web-connections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  justify-content: center;
+}
+.gs-web-tag {
+  font-size: 0.65rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 100px;
+  background: rgba(212, 168, 67, 0.15);
+  color: var(--gold);
+  border: 1px solid rgba(212, 168, 67, 0.25);
+}
+.gs-web-empty {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 1rem;
+  font-size: 0.9rem;
+}
+
+/* ============================================================
    RESPONSIVE
    ============================================================ */
 @media (max-width: 768px) {
@@ -1917,6 +2479,9 @@ a:hover { color: var(--gold-bright); }
   .form-row-inline { flex-direction: column; }
   .team-roster { grid-template-columns: 1fr; }
   .scoring-rules-grid { grid-template-columns: repeat(2, 1fr); }
+  .gs-idol-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  .gs-advantage-grid { grid-template-columns: 1fr; }
+  .gs-alliance-grid { grid-template-columns: 1fr; }
   .tab { font-size: 0.9rem; padding: 0.5rem 0.75rem; }
   .draft-pick-bar { flex-direction: column; }
   .draft-board { grid-template-columns: 1fr; }

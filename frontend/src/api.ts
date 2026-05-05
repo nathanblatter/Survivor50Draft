@@ -76,6 +76,28 @@ export const api = {
       method: 'POST', body: JSON.stringify({ episode }),
     }),
 
+  // Game State
+  getIdols: () => request<any[]>('/gamestate/idols'),
+  addIdol: (data: { player_id: number; label?: string; found_episode?: number; notes?: string }) =>
+    request<any>('/gamestate/idols', { method: 'POST', body: JSON.stringify(data) }),
+  updateIdol: (id: number, data: { played_episode?: number; is_active?: boolean; notes?: string }) =>
+    request<any>(`/gamestate/idols/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteIdol: (id: number) => request<any>(`/gamestate/idols/${id}`, { method: 'DELETE' }),
+
+  getAdvantages: () => request<any[]>('/gamestate/advantages'),
+  addAdvantage: (data: { player_id: number; advantage_type: string; found_episode?: number; notes?: string }) =>
+    request<any>('/gamestate/advantages', { method: 'POST', body: JSON.stringify(data) }),
+  updateAdvantage: (id: number, data: { played_episode?: number; is_active?: boolean; notes?: string }) =>
+    request<any>(`/gamestate/advantages/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteAdvantage: (id: number) => request<any>(`/gamestate/advantages/${id}`, { method: 'DELETE' }),
+
+  getAlliances: () => request<any[]>('/gamestate/alliances'),
+  createAlliance: (data: { name: string; formed_episode?: number; notes?: string; member_ids?: number[] }) =>
+    request<any>('/gamestate/alliances', { method: 'POST', body: JSON.stringify(data) }),
+  updateAlliance: (id: number, data: { name?: string; is_active?: boolean; notes?: string; member_ids?: number[] }) =>
+    request<any>(`/gamestate/alliances/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteAlliance: (id: number) => request<any>(`/gamestate/alliances/${id}`, { method: 'DELETE' }),
+
   // Tribes
   getTribes: () => request<any[]>('/tribes'),
   createTribe: (data: { name: string; color: string; phase?: string; introduced_episode?: number }) =>

@@ -1,46 +1,31 @@
 services:
-  db:
-    image: postgres:17-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: survivor50
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   app:
     build: .
     restart: unless-stopped
     ports:
       - "3001:3001"
-    depends_on:
-      db:
-        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file: .env
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/survivor50
-      ADMIN_PASSWORD: survivor50admin
-      JWT_SECRET: survivor50-draft-league-secret-key-2026
+      DATABASE_URL: postgresql://postgres:postgres@host.docker.internal:5432/survivor50
       PORT: 3001
-      # ANTHROPIC_API_KEY: your-api-key-here
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - app
 
   # One-off seed runner: docker compose run --rm seed
   seed:
     build: .
     profiles: ["tools"]
-    depends_on:
-      db:
-        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/survivor50
+      DATABASE_URL: postgresql://postgres:postgres@host.docker.internal:5432/survivor50
     command: ["node", "backend/dist/seed.js"]
-
-volumes:
-  pgdata:

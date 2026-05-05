@@ -90,6 +90,31 @@ router.post('/generate', authMiddleware, async (req: Request, res: Response) => 
       ORDER BY ep_score DESC
     `, [episode]);
 
+    // Get game state: active idols, advantages, alliances
+    const [idolsResult, advantagesResult, alliancesResult, eliminatedResult] = await Promise.all([
+      pool.query(`
+        SELECT gi.*, p.name as player_name FROM game_idols gi
+        JOIN players p ON p.id = gi.player_id
+        ORDER BY gi.is_active DESC
+      `),
+      pool.query(`
+        SELECT ga.*, p.name as player_name FROM game_advantages ga
+        JOIN players p ON p.id = ga.player_id
+        ORDER BY ga.is_active DESC
+      `),
+      pool.query(`
+        SELECT a.*, json_agg(p.name) FILTER (WHERE p.id IS NOT NULL) as member_names
+        FROM alliances a
+        LEFT JOIN alliance_members am ON am.alliance_id = a.id
+        LEFT JOIN players p ON p.id = am.player_id
+        WHERE a.is_active = true
+        GROUP BY a.id
+      `),
+      pool.query(`
+        SELECT name, placement FROM players WHERE is_eliminated = true ORDER BY placement DESC
+      `),
+    ]);
+
     const events = eventsResult.rows;
     const standings = standingsResult.rows;
     const epTeamScores = epTeamResult.rows;
@@ -110,6 +135,47 @@ router.post('/generate', authMiddleware, async (req: Request, res: Response) => 
       `• ${s.team_name} (${s.owner_name}): ${parseFloat(s.ep_score).toFixed(1)} pts this episode`
     ).join('\n');
 
+    // Build game state context
+    const activeIdols = idolsResult.rows.filter((i: any) => i.is_active);
+    const playedIdols = idolsResult.rows.filter((i: any) => !i.is_active && i.played_episode == episode);
+    const activeAdvantages = advantagesResult.rows.filter((a: any) => a.is_active);
+    const playedAdvantages = advantagesResult.rows.filter((a: any) => !a.is_active && a.played_episode == episode);
+    const activeAlliances = alliancesResult.rows;
+    const bootOrder = eliminatedResult.rows;
+
+    let gameStateText = '';
+
+    if (activeIdols.length > 0) {
+      gameStateText += '\nIdols currently in play:\n' + activeIdols.map((i: any) =>
+        `• ${i.player_name} has a ${i.label} (found ep ${i.found_episode}${i.notes ? `, ${i.notes}` : ''})`
+      ).join('\n');
+    }
+    if (playedIdols.length > 0) {
+      gameStateText += '\nIdols played this episode:\n' + playedIdols.map((i: any) =>
+        `• ${i.player_name} played their ${i.label}${i.notes ? ` (${i.notes})` : ''}`
+      ).join('\n');
+    }
+    if (activeAdvantages.length > 0) {
+      gameStateText += '\nAdvantages currently in play:\n' + activeAdvantages.map((a: any) =>
+        `• ${a.player_name} has ${a.advantage_type} (found ep ${a.found_episode}${a.notes ? `, ${a.notes}` : ''})`
+      ).join('\n');
+    }
+    if (playedAdvantages.length > 0) {
+      gameStateText += '\nAdvantages used this episode:\n' + playedAdvantages.map((a: any) =>
+        `• ${a.player_name} used their ${a.advantage_type}${a.notes ? ` (${a.notes})` : ''}`
+      ).join('\n');
+    }
+    if (activeAlliances.length > 0) {
+      gameStateText += '\nKnown alliances:\n' + activeAlliances.map((a: any) =>
+        `• "${a.name}" — members: ${(a.member_names || []).join(', ')}${a.notes ? ` (${a.notes})` : ''}`
+      ).join('\n');
+    }
+    if (bootOrder.length > 0) {
+      gameStateText += '\nEliminated players (most recent first):\n' + bootOrder.map((p: any) =>
+        `• ${p.name} (placed ${p.placement})`
+      ).join('\n');
+    }
+
     const prompt = `You are the official recap writer for the Survivor 50 Fantasy Draft League. Your job is to write an entertaining, dramatic, and funny episode summary that the league commissioner will send to all league members via group chat.
 
 This is Season 50 of Survivor, the biggest season ever — all returning legends. The fantasy league has teams of drafted players, and managers earn points based on their players' in-game performance.
@@ -123,14 +189,18 @@ ${epScoresText}
 
 Overall league standings after this episode:
 ${standingsText}
+${gameStateText ? `\nCurrent game state:${gameStateText}` : ''}
 
 Write a vivid, entertaining recap of Episode ${episode}. Guidelines:
 - Be dramatic and funny — channel Jeff Probst energy mixed with sports commentator hype
 - Reference specific players and what they did using the scoring events above
 - Call out fantasy managers by name — celebrate winners and roast those who had a bad week
-- Include fun section headers (e.g. "🔥 Tribal Council Carnage", "👑 MVP of the Week", "💀 The Fantasy Graveyard")
+- If any idols or advantages were played this episode, make that a dramatic highlight
+- If someone is sitting on an idol or advantage, tease the suspense of when they'll use it
+- Reference alliance dynamics if relevant — who's working together, who got blindsided
+- Include fun section headers (use emojis)
 - End with updated standings and a hype line for next week
-- Keep it between 300-500 words
+- Keep it between 400-600 words
 - Use emojis liberally
 - Make it feel like a group chat message, not an essay — fun, punchy, shareable`;
 
@@ -143,7 +213,7 @@ Write a vivid, entertaining recap of Episode ${episode}. Guidelines:
     const client = new Anthropic({ apiKey });
     const message = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
+      max_tokens: 2048,
       messages: [{ role: 'user', content: prompt }],
     });
 

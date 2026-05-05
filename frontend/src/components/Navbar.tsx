@@ -20,6 +20,7 @@ export default function Navbar() {
           <Link to="/cast" className={isActive('/cast')}>Cast</Link>
           <Link to="/draft" className={isActive('/draft')}>Draft</Link>
           <Link to="/scoreboard" className={isActive('/scoreboard')}>Scoreboard</Link>
+          <Link to="/gamestate" className={isActive('/gamestate')}>Game State</Link>
           {isAdmin ? (
             <>
               <Link to="/admin" className={isActive('/admin')}>Admin</Link>

@@ -39,9 +39,15 @@ async function migrate() {
         [p.id]
       );
       if (historyExists.rows.length === 0) {
+        const tribeRow = await client.query('SELECT id FROM tribes WHERE name = $1', [p.tribe]);
+        const tribe_id = tribeRow.rows[0]?.id;
+        if (!tribe_id) {
+          console.log(`  Skipping ${p.name}: tribe "${p.tribe}" not found`);
+          continue;
+        }
         await client.query(
-          'INSERT INTO tribe_history (player_id, tribe_name, phase, episode) VALUES ($1, $2, $3, $4)',
-          [p.id, p.tribe, 'original', 1]
+          'INSERT INTO tribe_history (player_id, tribe_id, phase, episode) VALUES ($1, $2, $3, $4)',
+          [p.id, tribe_id, 'original', 1]
         );
         console.log(`  Added tribe history for ${p.name}: ${p.tribe}`);
       } else {

@@ -97,11 +97,13 @@ async function seed() {
       { name: 'Kalo', color: '#4AC8D9' },
       { name: 'Vatu', color: '#D06CC0' },
     ];
+    const tribeIdMap: Record<string, number> = {};
     for (const tribe of originalTribes) {
-      await client.query(
-        'INSERT INTO tribes (name, color, phase, introduced_episode) VALUES ($1, $2, $3, $4)',
+      const result = await client.query(
+        'INSERT INTO tribes (name, color, phase, introduced_episode) VALUES ($1, $2, $3, $4) RETURNING id',
         [tribe.name, tribe.color, 'original', 1]
       );
+      tribeIdMap[tribe.name] = result.rows[0].id;
     }
     console.log('Inserted 3 original tribes');
 
@@ -109,8 +111,8 @@ async function seed() {
     const allPlayers = await client.query('SELECT id, tribe FROM players');
     for (const p of allPlayers.rows) {
       await client.query(
-        'INSERT INTO tribe_history (player_id, tribe_name, phase, episode) VALUES ($1, $2, $3, $4)',
-        [p.id, p.tribe, 'original', 1]
+        'INSERT INTO tribe_history (player_id, tribe_id, phase, episode) VALUES ($1, $2, $3, $4)',
+        [p.id, tribeIdMap[p.tribe], 'original', 1]
       );
     }
     console.log('Inserted tribe history for all players');

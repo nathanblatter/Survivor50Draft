@@ -13,10 +13,10 @@ router.get('/', async (_req: Request, res: Response) => {
         ) as total_points,
         COALESCE(
           (SELECT json_agg(json_build_object(
-            'tribe_name', th.tribe_name,
+            'tribe_name', t.name,
             'phase', th.phase,
             'episode', th.episode
-          ) ORDER BY th.id) FROM tribe_history th WHERE th.player_id = p.id),
+          ) ORDER BY th.id) FROM tribe_history th JOIN tribes t ON t.id = th.tribe_id WHERE th.player_id = p.id),
           '[]'::json
         ) as tribe_history
       FROM players p

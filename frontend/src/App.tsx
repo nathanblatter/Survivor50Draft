@@ -7,6 +7,7 @@ import TeamDetailPage from './pages/TeamDetailPage';
 import LoginPage from './pages/LoginPage';
 import DraftPage from './pages/DraftPage';
 import AdminPage from './pages/AdminPage';
+import GameStatePage from './pages/GameStatePage';
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
           <Route path="/cast" element={<CastPage />} />
           <Route path="/draft" element={<DraftPage />} />
           <Route path="/scoreboard" element={<ScoreboardPage />} />
+          <Route path="/gamestate" element={<GameStatePage />} />
           <Route path="/team/:id" element={<TeamDetailPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/admin" element={<AdminPage />} />

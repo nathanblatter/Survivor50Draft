@@ -85,11 +85,73 @@ export async function initDB() {
       CREATE TABLE IF NOT EXISTS tribe_history (
         id SERIAL PRIMARY KEY,
         player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
-        tribe_name VARCHAR(50) NOT NULL,
+        tribe_id INTEGER REFERENCES tribes(id) ON DELETE CASCADE,
         phase VARCHAR(20) NOT NULL,
         episode INTEGER,
         created_at TIMESTAMP DEFAULT NOW()
       );
+
+      CREATE TABLE IF NOT EXISTS game_idols (
+        id SERIAL PRIMARY KEY,
+        player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
+        label VARCHAR(100) DEFAULT 'Hidden Immunity Idol',
+        found_episode INTEGER,
+        played_episode INTEGER,
+        is_active BOOLEAN DEFAULT TRUE,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS game_advantages (
+        id SERIAL PRIMARY KEY,
+        player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
+        advantage_type VARCHAR(100) NOT NULL,
+        found_episode INTEGER,
+        played_episode INTEGER,
+        is_active BOOLEAN DEFAULT TRUE,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS alliances (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        formed_episode INTEGER,
+        is_active BOOLEAN DEFAULT TRUE,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS alliance_members (
+        id SERIAL PRIMARY KEY,
+        alliance_id INTEGER REFERENCES alliances(id) ON DELETE CASCADE,
+        player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
+        UNIQUE(alliance_id, player_id)
+      );
+    `);
+
+    // Migrate existing tribe_history: replace tribe_name with tribe_id
+    await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name='tribe_history' AND column_name='tribe_name'
+        ) THEN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name='tribe_history' AND column_name='tribe_id'
+          ) THEN
+            ALTER TABLE tribe_history ADD COLUMN tribe_id INTEGER REFERENCES tribes(id) ON DELETE CASCADE;
+          END IF;
+          UPDATE tribe_history th
+          SET tribe_id = t.id
+          FROM tribes t
+          WHERE t.name = th.tribe_name
+            AND th.tribe_id IS NULL;
+          ALTER TABLE tribe_history DROP COLUMN tribe_name;
+        END IF;
+      END$$;
     `);
     console.log('Database tables initialized');
   } finally {

@@ -74,10 +74,12 @@ router.post('/swap', authMiddleware, async (req: Request, res: Response) => {
         [tribe_name, player_id]
       );
 
-      // Insert tribe history entry
+      // Insert tribe history entry using tribe_id
+      const tribeRow = await client.query('SELECT id FROM tribes WHERE name = $1', [tribe_name]);
+      const tribe_id = tribeRow.rows[0].id;
       await client.query(
-        'INSERT INTO tribe_history (player_id, tribe_name, phase, episode) VALUES ($1, $2, $3, $4)',
-        [player_id, tribe_name, 'swap', episode]
+        'INSERT INTO tribe_history (player_id, tribe_id, phase, episode) VALUES ($1, $2, $3, $4)',
+        [player_id, tribe_id, 'swap', episode]
       );
     }
 
@@ -122,14 +124,15 @@ router.post('/merge', authMiddleware, async (req: Request, res: Response) => {
 
     await client.query('BEGIN');
 
-    // Create merge tribe
-    const exists = await client.query('SELECT id FROM tribes WHERE name = $1', [tribe_name]);
-    if (exists.rows.length === 0) {
-      await client.query(
-        'INSERT INTO tribes (name, color, phase, introduced_episode, is_active) VALUES ($1, $2, $3, $4, TRUE)',
+    // Create merge tribe (or fetch existing)
+    let mergeTribeResult = await client.query('SELECT id FROM tribes WHERE name = $1', [tribe_name]);
+    if (mergeTribeResult.rows.length === 0) {
+      mergeTribeResult = await client.query(
+        'INSERT INTO tribes (name, color, phase, introduced_episode, is_active) VALUES ($1, $2, $3, $4, TRUE) RETURNING id',
         [tribe_name, tribe_color, 'merge', episode]
       );
     }
+    const merge_tribe_id = mergeTribeResult.rows[0].id;
 
     // Deactivate all pre-merge tribes
     await client.query(
@@ -148,8 +151,8 @@ router.post('/merge', authMiddleware, async (req: Request, res: Response) => {
         [tribe_name, player.id]
       );
       await client.query(
-        'INSERT INTO tribe_history (player_id, tribe_name, phase, episode) VALUES ($1, $2, $3, $4)',
-        [player.id, tribe_name, 'merge', episode]
+        'INSERT INTO tribe_history (player_id, tribe_id, phase, episode) VALUES ($1, $2, $3, $4)',
+        [player.id, merge_tribe_id, 'merge', episode]
       );
     }
 

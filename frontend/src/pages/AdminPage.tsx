@@ -6,7 +6,7 @@ import { api } from '../api';
 import { Player, Team, ScoringRule, ScoringEvent, Tribe } from '../types';
 import PlayerCard from '../components/PlayerCard';
 
-type AdminTab = 'scoring' | 'eliminate' | 'teams' | 'draft' | 'tribes' | 'summary';
+type AdminTab = 'scoring' | 'challenges' | 'eliminate' | 'teams' | 'draft' | 'tribes' | 'gamestate' | 'summary';
 
 export default function AdminPage() {
   const { isAdmin, loading: authLoading } = useAuth();
@@ -29,6 +29,9 @@ export default function AdminPage() {
         <button className={`tab ${tab === 'scoring' ? 'active' : ''}`} onClick={() => setTab('scoring')}>
           Add Scores
         </button>
+        <button className={`tab ${tab === 'challenges' ? 'active' : ''}`} onClick={() => setTab('challenges')}>
+          Challenges
+        </button>
         <button className={`tab ${tab === 'eliminate' ? 'active' : ''}`} onClick={() => setTab('eliminate')}>
           Eliminate
         </button>
@@ -41,20 +44,27 @@ export default function AdminPage() {
         <button className={`tab ${tab === 'tribes' ? 'active' : ''}`} onClick={() => setTab('tribes')}>
           Tribes
         </button>
+        <button className={`tab ${tab === 'gamestate' ? 'active' : ''}`} onClick={() => setTab('gamestate')}>
+          Game State
+        </button>
         <button className={`tab ${tab === 'summary' ? 'active' : ''}`} onClick={() => setTab('summary')}>
           Recap
         </button>
       </div>
 
       {tab === 'scoring' && <ScoringTab />}
+      {tab === 'challenges' && <ChallengesTab />}
       {tab === 'eliminate' && <EliminateTab />}
       {tab === 'teams' && <TeamsTab />}
       {tab === 'draft' && <DraftTab />}
       {tab === 'tribes' && <TribesTab />}
+      {tab === 'gamestate' && <GameStateTab />}
       {tab === 'summary' && <SummaryTab />}
     </div>
   );
 }
+
+type VoteReceiver = { player_id: number; name: string; votes: number };
 
 function EliminateTab() {
   const [players, setPlayers] = useState<Player[]>([]);
@@ -65,6 +75,9 @@ function EliminateTab() {
   const [votesReceived, setVotesReceived] = useState('');
   const [episode, setEpisode] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [additionalVotes, setAdditionalVotes] = useState<VoteReceiver[]>([]);
+  const [addVotePlayerId, setAddVotePlayerId] = useState('');
+  const [addVoteCount, setAddVoteCount] = useState('');
 
   useEffect(() => { loadPlayers(); }, []);
 
@@ -81,6 +94,9 @@ function EliminateTab() {
     setPlacement(String(activePlayers.length));
     setVotesReceived('');
     setEpisode('');
+    setAdditionalVotes([]);
+    setAddVotePlayerId('');
+    setAddVoteCount('');
     setShowModal(true);
   };
 
@@ -106,7 +122,6 @@ function EliminateTab() {
       // 2. Add votes received scoring events (one per vote, each at -0.25)
       const votes = parseInt(votesReceived);
       if (votes > 0) {
-        // Use bulk-style: add one receives_votes event with notes showing count
         for (let i = 0; i < votes; i++) {
           await api.addScoringEvent({
             player_id: targetPlayer.id,
@@ -117,7 +132,22 @@ function EliminateTab() {
         }
       }
 
-      setMessage(`🔥 ${targetPlayer.name} has been voted out! (Placement: ${placementNum}${votes > 0 ? `, ${votes} vote${votes > 1 ? 's' : ''}` : ''})`);
+      // 3. Add votes for other players who received votes but weren't eliminated
+      for (const rv of additionalVotes) {
+        for (let i = 0; i < rv.votes; i++) {
+          await api.addScoringEvent({
+            player_id: rv.player_id,
+            event_type: 'receives_votes',
+            episode: episode ? parseInt(episode) : undefined,
+            notes: i === 0 ? `Received ${rv.votes} vote${rv.votes > 1 ? 's' : ''} at tribal` : undefined,
+          });
+        }
+      }
+
+      const additionalSummary = additionalVotes.length > 0
+        ? ` | Also voted: ${additionalVotes.map(rv => `${rv.name} (${rv.votes})`).join(', ')}`
+        : '';
+      setMessage(`🔥 ${targetPlayer.name} has been voted out! (Placement: ${placementNum}${votes > 0 ? `, ${votes} votes` : ''}${additionalSummary})`);
       setShowModal(false);
       setTargetPlayer(null);
       loadPlayers();
@@ -228,6 +258,52 @@ function EliminateTab() {
                 className="form-input"
                 placeholder="Ep #"
               />
+            </div>
+
+            <div className="form-group">
+              <label>Other Players Who Received Votes</label>
+              {additionalVotes.map(rv => (
+                <div key={rv.player_id} className="additional-vote-row">
+                  <span>{rv.name} — {rv.votes} vote{rv.votes > 1 ? 's' : ''} <span className="negative">({(rv.votes * -0.25).toFixed(2)} pts)</span></span>
+                  <button
+                    className="btn-remove-vote"
+                    onClick={() => setAdditionalVotes(prev => prev.filter(r => r.player_id !== rv.player_id))}
+                  >✕</button>
+                </div>
+              ))}
+              <div className="additional-vote-add">
+                <select
+                  value={addVotePlayerId}
+                  onChange={e => setAddVotePlayerId(e.target.value)}
+                  className="form-input"
+                >
+                  <option value="">Select player...</option>
+                  {activePlayers
+                    .filter(p => p.id !== targetPlayer.id && !additionalVotes.some(rv => rv.player_id === p.id))
+                    .map(p => <option key={p.id} value={p.id}>{p.name}</option>)
+                  }
+                </select>
+                <input
+                  type="number"
+                  min="1"
+                  max="20"
+                  value={addVoteCount}
+                  onChange={e => setAddVoteCount(e.target.value)}
+                  className="form-input vote-count-input"
+                  placeholder="# votes"
+                />
+                <button
+                  className="btn btn-secondary"
+                  disabled={!addVotePlayerId || !addVoteCount || parseInt(addVoteCount) < 1}
+                  onClick={() => {
+                    const player = activePlayers.find(p => p.id === parseInt(addVotePlayerId));
+                    if (!player) return;
+                    setAdditionalVotes(prev => [...prev, { player_id: player.id, name: player.name, votes: parseInt(addVoteCount) }]);
+                    setAddVotePlayerId('');
+                    setAddVoteCount('');
+                  }}
+                >Add</button>
+              </div>
             </div>
 
             {placement && parseInt(placement) >= 1 && (
@@ -1335,6 +1411,332 @@ function TribesTab() {
   );
 }
 
+type GameStateSection = 'idols' | 'advantages' | 'alliances';
+
+function GameStateTab() {
+  const [section, setSection] = useState<GameStateSection>('idols');
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [idols, setIdols] = useState<any[]>([]);
+  const [advantages, setAdvantages] = useState<any[]>([]);
+  const [alliances, setAlliances] = useState<any[]>([]);
+  const [message, setMessage] = useState('');
+
+  // Idol form
+  const [idolPlayerId, setIdolPlayerId] = useState(0);
+  const [idolLabel, setIdolLabel] = useState('Hidden Immunity Idol');
+  const [idolFoundEp, setIdolFoundEp] = useState('');
+  const [idolNotes, setIdolNotes] = useState('');
+
+  // Advantage form
+  const [advPlayerId, setAdvPlayerId] = useState(0);
+  const [advType, setAdvType] = useState('');
+  const [advFoundEp, setAdvFoundEp] = useState('');
+  const [advNotes, setAdvNotes] = useState('');
+
+  // Alliance form
+  const [allianceName, setAllianceName] = useState('');
+  const [allianceEp, setAllianceEp] = useState('');
+  const [allianceNotes, setAllianceNotes] = useState('');
+  const [allianceMemberIds, setAllianceMemberIds] = useState<number[]>([]);
+
+  useEffect(() => {
+    loadAll();
+  }, []);
+
+  const loadAll = () => {
+    api.getPlayers().then(setPlayers).catch(console.error);
+    api.getIdols().then(setIdols).catch(console.error);
+    api.getAdvantages().then(setAdvantages).catch(console.error);
+    api.getAlliances().then(setAlliances).catch(console.error);
+  };
+
+  const flash = (msg: string) => { setMessage(msg); setTimeout(() => setMessage(''), 4000); };
+  const activePlayers = players.filter(p => !p.is_eliminated);
+
+  const handleAddIdol = async () => {
+    if (!idolPlayerId) return;
+    try {
+      await api.addIdol({
+        player_id: idolPlayerId,
+        label: idolLabel || 'Hidden Immunity Idol',
+        found_episode: idolFoundEp ? parseInt(idolFoundEp) : undefined,
+        notes: idolNotes || undefined,
+      });
+      setIdolPlayerId(0); setIdolLabel('Hidden Immunity Idol'); setIdolFoundEp(''); setIdolNotes('');
+      loadAll();
+      flash('Idol added');
+    } catch (err: any) { flash(`Error: ${err.message}`); }
+  };
+
+  const handlePlayIdol = async (id: number, ep: string) => {
+    const played_episode = prompt('Which episode was it played?', ep || '');
+    if (!played_episode) return;
+    try {
+      await api.updateIdol(id, { played_episode: parseInt(played_episode), is_active: false });
+      loadAll();
+      flash('Idol marked as played');
+    } catch (err: any) { flash(`Error: ${err.message}`); }
+  };
+
+  const handleAddAdvantage = async () => {
+    if (!advPlayerId || !advType) return;
+    try {
+      await api.addAdvantage({
+        player_id: advPlayerId,
+        advantage_type: advType,
+        found_episode: advFoundEp ? parseInt(advFoundEp) : undefined,
+        notes: advNotes || undefined,
+      });
+      setAdvPlayerId(0); setAdvType(''); setAdvFoundEp(''); setAdvNotes('');
+      loadAll();
+      flash('Advantage added');
+    } catch (err: any) { flash(`Error: ${err.message}`); }
+  };
+
+  const handlePlayAdvantage = async (id: number, ep: string) => {
+    const played_episode = prompt('Which episode was it used?', ep || '');
+    if (!played_episode) return;
+    try {
+      await api.updateAdvantage(id, { played_episode: parseInt(played_episode), is_active: false });
+      loadAll();
+      flash('Advantage marked as used');
+    } catch (err: any) { flash(`Error: ${err.message}`); }
+  };
+
+  const handleAddAlliance = async () => {
+    if (!allianceName || allianceMemberIds.length === 0) return;
+    try {
+      await api.createAlliance({
+        name: allianceName,
+        formed_episode: allianceEp ? parseInt(allianceEp) : undefined,
+        notes: allianceNotes || undefined,
+        member_ids: allianceMemberIds,
+      });
+      setAllianceName(''); setAllianceEp(''); setAllianceNotes(''); setAllianceMemberIds([]);
+      loadAll();
+      flash('Alliance created');
+    } catch (err: any) { flash(`Error: ${err.message}`); }
+  };
+
+  const toggleAllianceMember = (id: number) => {
+    setAllianceMemberIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const advantageTypes = ['Steal-a-Vote', 'Extra Vote', 'Shot in the Dark', 'Safety Without Power', 'Knowledge is Power', 'Bank Your Vote', 'Immunity Idol Nullifier', 'Other'];
+
+  return (
+    <div className="admin-tab-content">
+      {message && (
+        <div className={`form-message ${message.startsWith('Error') ? 'error' : 'success'}`}>
+          {message}
+        </div>
+      )}
+
+      <div className="challenge-type-grid">
+        <button className={`challenge-type-btn ${section === 'idols' ? 'active' : ''}`} onClick={() => setSection('idols')}>
+          <span className="challenge-type-label">Idols</span>
+          <span className="challenge-type-sub">{idols.filter(i => i.is_active).length} active</span>
+        </button>
+        <button className={`challenge-type-btn ${section === 'advantages' ? 'active' : ''}`} onClick={() => setSection('advantages')}>
+          <span className="challenge-type-label">Advantages</span>
+          <span className="challenge-type-sub">{advantages.filter(a => a.is_active).length} active</span>
+        </button>
+        <button className={`challenge-type-btn ${section === 'alliances' ? 'active' : ''}`} onClick={() => setSection('alliances')}>
+          <span className="challenge-type-label">Alliances</span>
+          <span className="challenge-type-sub">{alliances.filter(a => a.is_active).length} active</span>
+        </button>
+      </div>
+
+      {section === 'idols' && (
+        <div style={{ marginTop: '1.5rem' }}>
+          <div className="scoring-form">
+            <h3>Add Idol</h3>
+            <div className="form-group">
+              <label>Player</label>
+              <select value={idolPlayerId} onChange={e => setIdolPlayerId(parseInt(e.target.value))} className="form-select">
+                <option value={0}>-- Select player --</option>
+                {activePlayers.map(p => <option key={p.id} value={p.id}>{p.name} ({p.tribe})</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Label</label>
+              <input type="text" value={idolLabel} onChange={e => setIdolLabel(e.target.value)} className="form-input" placeholder="Hidden Immunity Idol" />
+            </div>
+            <div className="form-row-inline">
+              <div className="form-group">
+                <label>Found Episode</label>
+                <input type="number" min="1" value={idolFoundEp} onChange={e => setIdolFoundEp(e.target.value)} className="form-input" placeholder="#" style={{ maxWidth: 100 }} />
+              </div>
+              <div className="form-group" style={{ flex: 1 }}>
+                <label>Notes</label>
+                <input type="text" value={idolNotes} onChange={e => setIdolNotes(e.target.value)} className="form-input" placeholder="Optional details" />
+              </div>
+            </div>
+            <button className="btn btn-primary btn-full" onClick={handleAddIdol} disabled={!idolPlayerId}>Add Idol</button>
+          </div>
+
+          {idols.length > 0 && (
+            <div className="recent-events" style={{ marginTop: '1.5rem' }}>
+              <h3>Idol Tracker</h3>
+              <table className="log-table">
+                <thead>
+                  <tr><th>Player</th><th>Label</th><th>Found</th><th>Status</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                  {idols.map(idol => (
+                    <tr key={idol.id} style={{ opacity: idol.is_active ? 1 : 0.5 }}>
+                      <td>{idol.player_name}</td>
+                      <td>{idol.label}{idol.notes ? ` (${idol.notes})` : ''}</td>
+                      <td>Ep {idol.found_episode || '?'}</td>
+                      <td>{idol.is_active ? 'In pocket' : `Played ep ${idol.played_episode}`}</td>
+                      <td>
+                        {idol.is_active && (
+                          <button className="btn btn-sm" onClick={() => handlePlayIdol(idol.id, '')}>Mark Played</button>
+                        )}
+                        <button className="btn btn-sm btn-danger" style={{ marginLeft: 4 }} onClick={async () => { await api.deleteIdol(idol.id); loadAll(); }}>Delete</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {section === 'advantages' && (
+        <div style={{ marginTop: '1.5rem' }}>
+          <div className="scoring-form">
+            <h3>Add Advantage</h3>
+            <div className="form-group">
+              <label>Player</label>
+              <select value={advPlayerId} onChange={e => setAdvPlayerId(parseInt(e.target.value))} className="form-select">
+                <option value={0}>-- Select player --</option>
+                {activePlayers.map(p => <option key={p.id} value={p.id}>{p.name} ({p.tribe})</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Advantage Type</label>
+              <select value={advType} onChange={e => setAdvType(e.target.value)} className="form-select">
+                <option value="">-- Select type --</option>
+                {advantageTypes.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              {advType === 'Other' && (
+                <input type="text" value={advType === 'Other' ? '' : advType} onChange={e => setAdvType(e.target.value)} className="form-input" placeholder="Custom advantage name" style={{ marginTop: 8 }} />
+              )}
+            </div>
+            <div className="form-row-inline">
+              <div className="form-group">
+                <label>Found Episode</label>
+                <input type="number" min="1" value={advFoundEp} onChange={e => setAdvFoundEp(e.target.value)} className="form-input" placeholder="#" style={{ maxWidth: 100 }} />
+              </div>
+              <div className="form-group" style={{ flex: 1 }}>
+                <label>Notes</label>
+                <input type="text" value={advNotes} onChange={e => setAdvNotes(e.target.value)} className="form-input" placeholder="Optional details" />
+              </div>
+            </div>
+            <button className="btn btn-primary btn-full" onClick={handleAddAdvantage} disabled={!advPlayerId || !advType}>Add Advantage</button>
+          </div>
+
+          {advantages.length > 0 && (
+            <div className="recent-events" style={{ marginTop: '1.5rem' }}>
+              <h3>Advantage Tracker</h3>
+              <table className="log-table">
+                <thead>
+                  <tr><th>Player</th><th>Type</th><th>Found</th><th>Status</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                  {advantages.map(adv => (
+                    <tr key={adv.id} style={{ opacity: adv.is_active ? 1 : 0.5 }}>
+                      <td>{adv.player_name}</td>
+                      <td>{adv.advantage_type}{adv.notes ? ` (${adv.notes})` : ''}</td>
+                      <td>Ep {adv.found_episode || '?'}</td>
+                      <td>{adv.is_active ? 'Held' : `Used ep ${adv.played_episode}`}</td>
+                      <td>
+                        {adv.is_active && (
+                          <button className="btn btn-sm" onClick={() => handlePlayAdvantage(adv.id, '')}>Mark Used</button>
+                        )}
+                        <button className="btn btn-sm btn-danger" style={{ marginLeft: 4 }} onClick={async () => { await api.deleteAdvantage(adv.id); loadAll(); }}>Delete</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {section === 'alliances' && (
+        <div style={{ marginTop: '1.5rem' }}>
+          <div className="scoring-form">
+            <h3>Create Alliance</h3>
+            <div className="form-row-inline">
+              <div className="form-group" style={{ flex: 2 }}>
+                <label>Alliance Name</label>
+                <input type="text" value={allianceName} onChange={e => setAllianceName(e.target.value)} className="form-input" placeholder='e.g. "The Legends Pact"' />
+              </div>
+              <div className="form-group">
+                <label>Formed Episode</label>
+                <input type="number" min="1" value={allianceEp} onChange={e => setAllianceEp(e.target.value)} className="form-input" placeholder="#" style={{ maxWidth: 100 }} />
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Notes</label>
+              <input type="text" value={allianceNotes} onChange={e => setAllianceNotes(e.target.value)} className="form-input" placeholder="Optional details" />
+            </div>
+            <div className="form-group">
+              <label>Members ({allianceMemberIds.length} selected)</label>
+              <div className="bulk-player-grid">
+                {activePlayers.map(p => (
+                  <PlayerCard
+                    key={p.id}
+                    player={p}
+                    compact
+                    selected={allianceMemberIds.includes(p.id)}
+                    onClick={() => toggleAllianceMember(p.id)}
+                  />
+                ))}
+              </div>
+            </div>
+            <button className="btn btn-primary btn-full" onClick={handleAddAlliance} disabled={!allianceName || allianceMemberIds.length === 0}>Create Alliance</button>
+          </div>
+
+          {alliances.length > 0 && (
+            <div className="recent-events" style={{ marginTop: '1.5rem' }}>
+              <h3>Alliance Tracker</h3>
+              {alliances.map(alliance => (
+                <div key={alliance.id} className="scoring-form" style={{ marginBottom: '1rem', opacity: alliance.is_active ? 1 : 0.5 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <strong>{alliance.name}</strong>
+                      {alliance.formed_episode && <span style={{ marginLeft: 8, opacity: 0.7 }}>formed ep {alliance.formed_episode}</span>}
+                      {alliance.notes && <span style={{ marginLeft: 8, opacity: 0.7 }}>— {alliance.notes}</span>}
+                    </div>
+                    <div>
+                      {alliance.is_active && (
+                        <button className="btn btn-sm" onClick={async () => { await api.updateAlliance(alliance.id, { is_active: false }); loadAll(); }}>Dissolve</button>
+                      )}
+                      <button className="btn btn-sm btn-danger" style={{ marginLeft: 4 }} onClick={async () => { await api.deleteAlliance(alliance.id); loadAll(); }}>Delete</button>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {(alliance.members || []).map((m: any) => (
+                      <span key={m.id} className="tribe-pill" style={{ fontSize: '0.85rem', opacity: m.is_eliminated ? 0.5 : 1 }}>
+                        {m.name} {m.is_eliminated ? '(out)' : ''}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SummaryTab() {
   const [episodes, setEpisodes] = useState<{ episode: number; event_count: number }[]>([]);
   const [selectedEp, setSelectedEp] = useState<number>(0);
@@ -1491,6 +1893,275 @@ function SummaryTab() {
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+type ChallengeType = 'tribe_reward' | 'tribe_immunity' | 'individual_reward' | 'individual_immunity';
+
+function ChallengesTab() {
+  const { tribes } = useTribes();
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [challengeType, setChallengeType] = useState<ChallengeType>('tribe_immunity');
+  const [episode, setEpisode] = useState('');
+  const [message, setMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  // Tribe challenge state
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState<number[]>([]);
+
+  // Individual reward state
+  const [rewardWinnerId, setRewardWinnerId] = useState<number>(0);
+  const [chosenForReward, setChosenForReward] = useState<number[]>([]);
+
+  // Individual immunity state
+  const [immunityWinners, setImmunityWinners] = useState<number[]>([]);
+
+  useEffect(() => { api.getPlayers().then(setPlayers).catch(console.error); }, []);
+
+  const activePlayers = players.filter(p => !p.is_eliminated);
+  const activeTribes = tribes.filter(t => t.is_active);
+
+  const reset = () => {
+    setSelectedPlayerIds([]);
+    setRewardWinnerId(0);
+    setChosenForReward([]);
+    setImmunityWinners([]);
+    setEpisode('');
+  };
+
+  const selectTribe = (tribeName: string) => {
+    const tribePlayerIds = activePlayers.filter(p => p.tribe === tribeName).map(p => p.id);
+    const allSelected = tribePlayerIds.every(id => selectedPlayerIds.includes(id));
+    if (allSelected) {
+      setSelectedPlayerIds(prev => prev.filter(id => !tribePlayerIds.includes(id)));
+    } else {
+      setSelectedPlayerIds(prev => [...new Set([...prev, ...tribePlayerIds])]);
+    }
+  };
+
+  const togglePlayer = (id: number) => {
+    setSelectedPlayerIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const toggleChosenForReward = (id: number) => {
+    setChosenForReward(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const toggleImmunityWinner = (id: number) => {
+    setImmunityWinners(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const handleSubmit = async () => {
+    const ep = episode ? parseInt(episode) : undefined;
+    setSubmitting(true);
+    try {
+      if (challengeType === 'tribe_reward' || challengeType === 'tribe_immunity') {
+        if (selectedPlayerIds.length === 0) {
+          setMessage('Error: Select at least one player');
+          setSubmitting(false);
+          return;
+        }
+        const event_type = challengeType === 'tribe_reward' ? 'tribe_wins_reward' : 'tribe_wins_immunity';
+        await api.addBulkScoringEvents({ player_ids: selectedPlayerIds, event_type, episode: ep });
+        setMessage(`${challengeType === 'tribe_reward' ? 'Tribe reward' : 'Tribe immunity'} logged for ${selectedPlayerIds.length} players`);
+
+      } else if (challengeType === 'individual_reward') {
+        if (!rewardWinnerId) {
+          setMessage('Error: Select the challenge winner');
+          setSubmitting(false);
+          return;
+        }
+        await api.addScoringEvent({ player_id: rewardWinnerId, event_type: 'wins_individual_reward', episode: ep });
+        for (const pid of chosenForReward) {
+          await api.addScoringEvent({ player_id: pid, event_type: 'chosen_for_reward', episode: ep });
+        }
+        const winnerName = activePlayers.find(p => p.id === rewardWinnerId)?.name;
+        setMessage(`Individual reward logged — winner: ${winnerName}${chosenForReward.length > 0 ? `, ${chosenForReward.length} chosen for reward` : ''}`);
+
+      } else if (challengeType === 'individual_immunity') {
+        if (immunityWinners.length === 0) {
+          setMessage('Error: Select at least one immunity winner');
+          setSubmitting(false);
+          return;
+        }
+        for (const pid of immunityWinners) {
+          await api.addScoringEvent({ player_id: pid, event_type: 'wins_individual_immunity', episode: ep });
+        }
+        const names = immunityWinners.map(id => activePlayers.find(p => p.id === id)?.name).join(', ');
+        setMessage(`Individual immunity logged — winner${immunityWinners.length > 1 ? 's' : ''}: ${names}`);
+      }
+
+      reset();
+      setTimeout(() => setMessage(''), 5000);
+    } catch (err: any) {
+      setMessage(`Error: ${err.message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const challengeOptions: { type: ChallengeType; label: string; sub: string }[] = [
+    { type: 'tribe_immunity', label: 'Tribe Immunity', sub: '+1 pt / player' },
+    { type: 'tribe_reward', label: 'Tribe Reward', sub: '+0.5 pts / player' },
+    { type: 'individual_immunity', label: 'Individual Immunity', sub: 'Winner +3 pts' },
+    { type: 'individual_reward', label: 'Individual Reward', sub: 'Win +2, chosen +0.5' },
+  ];
+
+  const isTribe = challengeType === 'tribe_reward' || challengeType === 'tribe_immunity';
+
+  return (
+    <div className="admin-tab-content">
+      {message && (
+        <div className={`form-message ${message.startsWith('Error') ? 'error' : 'success'}`}>
+          {message}
+        </div>
+      )}
+
+      <div className="challenge-type-grid">
+        {challengeOptions.map(opt => (
+          <button
+            key={opt.type}
+            className={`challenge-type-btn ${challengeType === opt.type ? 'active' : ''}`}
+            onClick={() => { setChallengeType(opt.type); reset(); }}
+          >
+            <span className="challenge-type-label">{opt.label}</span>
+            <span className="challenge-type-sub">{opt.sub}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="form-group" style={{ marginTop: '1.5rem' }}>
+        <label>Episode (optional)</label>
+        <input
+          type="number"
+          min="1"
+          value={episode}
+          onChange={e => setEpisode(e.target.value)}
+          className="form-input"
+          placeholder="Ep #"
+          style={{ maxWidth: 120 }}
+        />
+      </div>
+
+      {isTribe && (
+        <>
+          <div className="form-group">
+            <label>Quick-select a tribe</label>
+            <div className="challenge-tribe-pills">
+              {activeTribes.map(t => {
+                const tribePlayerIds = activePlayers.filter(p => p.tribe === t.name).map(p => p.id);
+                const allSelected = tribePlayerIds.length > 0 && tribePlayerIds.every(id => selectedPlayerIds.includes(id));
+                return (
+                  <button
+                    key={t.id}
+                    className={`tribe-pill ${allSelected ? 'selected' : ''}`}
+                    style={{ '--tribe-color': t.color } as React.CSSProperties}
+                    onClick={() => selectTribe(t.name)}
+                  >
+                    {t.name} ({tribePlayerIds.length})
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="form-group">
+            <label>{selectedPlayerIds.length} player{selectedPlayerIds.length !== 1 ? 's' : ''} selected — deselect any sit-outs</label>
+            <div className="bulk-player-grid">
+              {activePlayers.map(p => (
+                <PlayerCard
+                  key={p.id}
+                  player={p}
+                  compact
+                  selected={selectedPlayerIds.includes(p.id)}
+                  onClick={() => togglePlayer(p.id)}
+                />
+              ))}
+            </div>
+          </div>
+          {selectedPlayerIds.length > 0 && (
+            <div className="points-preview">
+              {selectedPlayerIds.length} × {challengeType === 'tribe_reward' ? '0.5' : '1'} = +{(selectedPlayerIds.length * (challengeType === 'tribe_reward' ? 0.5 : 1)).toFixed(1)} total pts
+            </div>
+          )}
+        </>
+      )}
+
+      {challengeType === 'individual_reward' && (
+        <>
+          <div className="form-group">
+            <label>Challenge Winner <span className="pts-badge positive">+2 pts</span></label>
+            <select
+              value={rewardWinnerId}
+              onChange={e => setRewardWinnerId(parseInt(e.target.value))}
+              className="form-select"
+            >
+              <option value={0}>-- Select winner --</option>
+              {activePlayers.map(p => (
+                <option key={p.id} value={p.id}>{p.name} ({p.tribe})</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Also went on reward <span className="pts-badge positive">+0.5 pts each</span></label>
+            <div className="bulk-player-grid">
+              {activePlayers.filter(p => p.id !== rewardWinnerId).map(p => (
+                <PlayerCard
+                  key={p.id}
+                  player={p}
+                  compact
+                  selected={chosenForReward.includes(p.id)}
+                  onClick={() => toggleChosenForReward(p.id)}
+                />
+              ))}
+            </div>
+          </div>
+          {(rewardWinnerId > 0 || chosenForReward.length > 0) && (
+            <div className="points-preview">
+              {rewardWinnerId > 0 && <span>{activePlayers.find(p => p.id === rewardWinnerId)?.name}: +2 pts</span>}
+              {chosenForReward.length > 0 && (
+                <span style={{ marginLeft: '1rem' }}>{chosenForReward.length} chosen: +{(chosenForReward.length * 0.5).toFixed(1)} pts</span>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {challengeType === 'individual_immunity' && (
+        <>
+          <div className="form-group">
+            <label>
+              Immunity Winner{immunityWinners.length !== 1 ? 's' : ''} <span className="pts-badge positive">+3 pts each</span>
+              <span className="label-hint"> — tap to select</span>
+            </label>
+            <div className="bulk-player-grid">
+              {activePlayers.map(p => (
+                <PlayerCard
+                  key={p.id}
+                  player={p}
+                  compact
+                  selected={immunityWinners.includes(p.id)}
+                  onClick={() => toggleImmunityWinner(p.id)}
+                />
+              ))}
+            </div>
+          </div>
+          {immunityWinners.length > 0 && (
+            <div className="points-preview">
+              {immunityWinners.length} winner{immunityWinners.length > 1 ? 's' : ''} × 3 = +{immunityWinners.length * 3} pts
+            </div>
+          )}
+        </>
+      )}
+
+      <button
+        className="btn btn-primary btn-full"
+        style={{ marginTop: '1.5rem' }}
+        onClick={handleSubmit}
+        disabled={submitting}
+      >
+        {submitting ? 'Submitting...' : 'Log Challenge Results'}
+      </button>
     </div>
   );
 }
