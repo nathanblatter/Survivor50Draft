@@ -4,35 +4,49 @@ import { authMiddleware } from '../middleware/auth';
 
 const router = Router();
 
-router.get('/', async (_req: Request, res: Response) => {
+// Helper: get teams with players and scores, optionally filtered by league
+async function getTeamsWithScores(leagueId?: number) {
+  const whereClause = leagueId ? 'WHERE t.league_id = $1' : '';
+  const params = leagueId ? [leagueId] : [];
+
+  const teamsResult = await pool.query(
+    `SELECT * FROM teams t ${whereClause} ORDER BY t.draft_order, t.id`,
+    params
+  );
+  const teams = [];
+
+  for (const team of teamsResult.rows) {
+    const playersResult = await pool.query(`
+      SELECT p.*, tp.pick_number,
+        COALESCE(
+          (SELECT SUM(se.points) FROM scoring_events se WHERE se.player_id = p.id), 0
+        ) as total_points
+      FROM team_players tp
+      JOIN players p ON p.id = tp.player_id
+      WHERE tp.team_id = $1
+      ORDER BY tp.pick_number
+    `, [team.id]);
+
+    const totalScore = playersResult.rows.reduce(
+      (sum: number, p: any) => sum + parseFloat(p.total_points || 0), 0
+    );
+
+    teams.push({
+      ...team,
+      players: playersResult.rows,
+      total_score: totalScore,
+    });
+  }
+
+  teams.sort((a, b) => b.total_score - a.total_score);
+  return teams;
+}
+
+// ── Scoped: GET /api/leagues/:leagueId/teams ──
+router.get('/leagues/:leagueId/teams', async (req: Request, res: Response) => {
   try {
-    const teamsResult = await pool.query('SELECT * FROM teams ORDER BY draft_order, id');
-    const teams = [];
-
-    for (const team of teamsResult.rows) {
-      const playersResult = await pool.query(`
-        SELECT p.*, tp.pick_number,
-          COALESCE(
-            (SELECT SUM(se.points) FROM scoring_events se WHERE se.player_id = p.id), 0
-          ) as total_points
-        FROM team_players tp
-        JOIN players p ON p.id = tp.player_id
-        WHERE tp.team_id = $1
-        ORDER BY tp.pick_number
-      `, [team.id]);
-
-      const totalScore = playersResult.rows.reduce(
-        (sum: number, p: any) => sum + parseFloat(p.total_points || 0), 0
-      );
-
-      teams.push({
-        ...team,
-        players: playersResult.rows,
-        total_score: totalScore,
-      });
-    }
-
-    teams.sort((a, b) => b.total_score - a.total_score);
+    const leagueId = parseInt(req.params.leagueId as string);
+    const teams = await getTeamsWithScores(leagueId);
     res.json(teams);
   } catch (err) {
     console.error(err);
@@ -40,6 +54,38 @@ router.get('/', async (_req: Request, res: Response) => {
   }
 });
 
+// ── Scoped: POST /api/leagues/:leagueId/teams ──
+router.post('/leagues/:leagueId/teams', async (req: Request, res: Response) => {
+  try {
+    const { leagueId } = req.params;
+    const { name, owner_name, draft_order } = req.body;
+    if (!name || !owner_name) {
+      res.status(400).json({ error: 'name and owner_name are required' });
+      return;
+    }
+    const result = await pool.query(
+      'INSERT INTO teams (league_id, name, owner_name, draft_order) VALUES ($1, $2, $3, $4) RETURNING *',
+      [leagueId, name, owner_name, draft_order || null]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to create team' });
+  }
+});
+
+// ── Legacy: GET /api/teams ──
+router.get('/', async (_req: Request, res: Response) => {
+  try {
+    const teams = await getTeamsWithScores();
+    res.json(teams);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch teams' });
+  }
+});
+
+// ── GET /api/teams/:id ──
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -85,17 +131,27 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
-// Public: anyone can create a team (for draft setup with friends)
+// ── Legacy: POST /api/teams ──
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { name, owner_name, draft_order } = req.body;
+    const { name, owner_name, draft_order, league_id } = req.body;
     if (!name || !owner_name) {
       res.status(400).json({ error: 'name and owner_name are required' });
       return;
     }
+    // Default to first league if not specified (backward compat)
+    let lid = league_id;
+    if (!lid) {
+      const defaultLeague = await pool.query('SELECT id FROM leagues ORDER BY id LIMIT 1');
+      lid = defaultLeague.rows[0]?.id;
+    }
+    if (!lid) {
+      res.status(400).json({ error: 'league_id is required' });
+      return;
+    }
     const result = await pool.query(
-      'INSERT INTO teams (name, owner_name, draft_order) VALUES ($1, $2, $3) RETURNING *',
-      [name, owner_name, draft_order || null]
+      'INSERT INTO teams (league_id, name, owner_name, draft_order) VALUES ($1, $2, $3, $4) RETURNING *',
+      [lid, name, owner_name, draft_order || null]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {

@@ -36,7 +36,7 @@ const castMembers = [
 ];
 
 const scoringRules = [
-  { eventType: "placement", points: 0, description: "Place in the game (pts = 25 - placement)", isVariable: true },
+  { eventType: "placement", points: 0, description: "Place in the game (pts = cast_count + 1 - placement)", isVariable: true },
   { eventType: "makes_merge", points: 3, description: "Makes the merge" },
   { eventType: "makes_jury", points: 5, description: "Makes the jury" },
   { eventType: "makes_ftc", points: 7, description: "Makes Final Tribal Council" },
@@ -63,21 +63,54 @@ async function seed() {
   try {
     await client.query('BEGIN');
 
-    // Clear existing data
+    // Create show
+    const showResult = await client.query(
+      `INSERT INTO shows (name, slug, description)
+       VALUES ('Survivor', 'survivor', 'The original reality competition')
+       ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
+       RETURNING id`
+    );
+    const showId = showResult.rows[0].id;
+
+    // Create season
+    const seasonResult = await client.query(
+      `INSERT INTO seasons (show_id, season_number, name, cast_count, is_active)
+       VALUES ($1, 50, 'In the Hands of the Fans', $2, true)
+       ON CONFLICT (show_id, season_number) DO UPDATE SET name = EXCLUDED.name
+       RETURNING id`,
+      [showId, castMembers.length]
+    );
+    const seasonId = seasonResult.rows[0].id;
+
+    // Create default league
+    const leagueResult = await client.query(
+      `INSERT INTO leagues (season_id, name, invite_code)
+       VALUES ($1, 'Original League', 'og-league')
+       ON CONFLICT (invite_code) DO UPDATE SET name = EXCLUDED.name
+       RETURNING id`,
+      [seasonId]
+    );
+    const leagueId = leagueResult.rows[0].id;
+
+    // Clear existing data (in dependency order)
+    await client.query('DELETE FROM alliance_members');
+    await client.query('DELETE FROM alliances WHERE season_id = $1', [seasonId]);
+    await client.query('DELETE FROM game_advantages WHERE season_id = $1', [seasonId]);
+    await client.query('DELETE FROM game_idols WHERE season_id = $1', [seasonId]);
     await client.query('DELETE FROM tribe_history');
-    await client.query('DELETE FROM tribes');
     await client.query('DELETE FROM scoring_events');
     await client.query('DELETE FROM team_players');
-    await client.query('DELETE FROM teams');
-    await client.query('DELETE FROM scoring_rules');
-    await client.query('DELETE FROM players');
-    await client.query('DELETE FROM draft_state');
+    await client.query('DELETE FROM draft_state WHERE league_id = $1', [leagueId]);
+    await client.query('DELETE FROM teams WHERE league_id = $1', [leagueId]);
+    await client.query('DELETE FROM scoring_rules WHERE show_id = $1', [showId]);
+    await client.query('DELETE FROM tribes WHERE season_id = $1', [seasonId]);
+    await client.query('DELETE FROM players WHERE season_id = $1', [seasonId]);
 
     // Insert players
     for (const player of castMembers) {
       await client.query(
-        'INSERT INTO players (name, nickname, original_seasons, tribe, photo_url) VALUES ($1, $2, $3, $4, $5)',
-        [player.name, player.nickname, player.originalSeasons, player.tribe, player.photoUrl]
+        'INSERT INTO players (season_id, name, nickname, original_seasons, tribe, photo_url) VALUES ($1, $2, $3, $4, $5, $6)',
+        [seasonId, player.name, player.nickname, player.originalSeasons, player.tribe, player.photoUrl]
       );
     }
     console.log(`Inserted ${castMembers.length} players`);
@@ -85,8 +118,8 @@ async function seed() {
     // Insert scoring rules
     for (const rule of scoringRules) {
       await client.query(
-        'INSERT INTO scoring_rules (event_type, points, description, is_variable) VALUES ($1, $2, $3, $4)',
-        [rule.eventType, rule.points, rule.description, rule.isVariable || false]
+        'INSERT INTO scoring_rules (show_id, event_type, points, description, is_variable) VALUES ($1, $2, $3, $4, $5)',
+        [showId, rule.eventType, rule.points, rule.description, rule.isVariable || false]
       );
     }
     console.log(`Inserted ${scoringRules.length} scoring rules`);
@@ -100,15 +133,15 @@ async function seed() {
     const tribeIdMap: Record<string, number> = {};
     for (const tribe of originalTribes) {
       const result = await client.query(
-        'INSERT INTO tribes (name, color, phase, introduced_episode) VALUES ($1, $2, $3, $4) RETURNING id',
-        [tribe.name, tribe.color, 'original', 1]
+        'INSERT INTO tribes (season_id, name, color, phase, introduced_episode) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+        [seasonId, tribe.name, tribe.color, 'original', 1]
       );
       tribeIdMap[tribe.name] = result.rows[0].id;
     }
     console.log('Inserted 3 original tribes');
 
     // Insert tribe history for each player
-    const allPlayers = await client.query('SELECT id, tribe FROM players');
+    const allPlayers = await client.query('SELECT id, tribe FROM players WHERE season_id = $1', [seasonId]);
     for (const p of allPlayers.rows) {
       await client.query(
         'INSERT INTO tribe_history (player_id, tribe_id, phase, episode) VALUES ($1, $2, $3, $4)',
@@ -117,9 +150,10 @@ async function seed() {
     }
     console.log('Inserted tribe history for all players');
 
-    // Initialize draft state
+    // Initialize draft state for the default league
     await client.query(
-      'INSERT INTO draft_state (is_active, is_complete, current_pick) VALUES (false, false, 1)'
+      'INSERT INTO draft_state (league_id, is_active, is_complete, current_pick) VALUES ($1, false, false, 1)',
+      [leagueId]
     );
 
     await client.query('COMMIT');

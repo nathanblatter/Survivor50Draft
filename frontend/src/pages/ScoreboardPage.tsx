@@ -2,19 +2,37 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { Team, ScoringRule, ScoringEvent } from '../types';
+import { useAppContext } from '../context/AppContext';
 import PlayerCard from '../components/PlayerCard';
 
 export default function ScoreboardPage() {
+  const { show, season, league } = useAppContext();
   const [teams, setTeams] = useState<Team[]>([]);
   const [rules, setRules] = useState<ScoringRule[]>([]);
   const [events, setEvents] = useState<ScoringEvent[]>([]);
   const [activeTab, setActiveTab] = useState<'standings' | 'rules' | 'log'>('standings');
 
+  const leagueBase = show && season && league
+    ? `/${show.slug}/${season.season_number}/leagues/${league.invite_code}`
+    : '';
+
   useEffect(() => {
-    api.getTeams().then(setTeams).catch(console.error);
-    api.getScoringRules().then(setRules).catch(console.error);
-    api.getScoringEvents(100).then(setEvents).catch(console.error);
-  }, []);
+    if (league) {
+      api.getLeagueTeams(league.id).then(setTeams).catch(console.error);
+    } else {
+      api.getTeams().then(setTeams).catch(console.error);
+    }
+    if (show) {
+      api.getShowScoringRules(show.slug).then(setRules).catch(console.error);
+    } else {
+      api.getScoringRules().then(setRules).catch(console.error);
+    }
+    if (season) {
+      api.getSeasonScoringEvents(season.id, 100).then(setEvents).catch(console.error);
+    } else {
+      api.getScoringEvents(100).then(setEvents).catch(console.error);
+    }
+  }, [league, show, season]);
 
   return (
     <div className="scoreboard-page">
@@ -38,7 +56,7 @@ export default function ScoreboardPage() {
             <div className="empty-state">No teams yet. The draft hasn't started!</div>
           ) : (
             teams.map((team, idx) => (
-              <Link to={`/team/${team.id}`} key={team.id} className="team-card-link">
+              <Link to={`${leagueBase}/team/${team.id}`} key={team.id} className="team-card-link">
                 <div className="team-card">
                   <div className="team-rank">
                     {idx === 0 && <span className="crown">👑</span>}

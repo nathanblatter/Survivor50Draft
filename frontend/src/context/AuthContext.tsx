@@ -20,12 +20,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('survivor50_token');
+    const token = localStorage.getItem('fantasydraft_token');
     if (token) {
       api.verifyToken()
         .then(() => setIsAdmin(true))
         .catch(() => {
-          localStorage.removeItem('survivor50_token');
+          localStorage.removeItem('fantasydraft_token');
           setIsAdmin(false);
         })
         .finally(() => setLoading(false));
@@ -36,12 +36,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (password: string) => {
     const { token } = await api.login(password);
-    localStorage.setItem('survivor50_token', token);
+    localStorage.setItem('fantasydraft_token', token);
     setIsAdmin(true);
   };
 
   const logout = () => {
-    localStorage.removeItem('survivor50_token');
+    localStorage.removeItem('fantasydraft_token');
     setIsAdmin(false);
   };
 

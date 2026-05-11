@@ -2,16 +2,22 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { Player } from '../types';
 import { useTribes } from '../context/TribeContext';
+import { useAppContext } from '../context/AppContext';
 import PlayerCard from '../components/PlayerCard';
 
 export default function CastPage() {
+  const { season } = useAppContext();
   const [players, setPlayers] = useState<Player[]>([]);
   const [filter, setFilter] = useState<string>('all');
   const { activeTribes, getTribeColor } = useTribes();
 
   useEffect(() => {
-    api.getPlayers().then(setPlayers).catch(console.error);
-  }, []);
+    if (season) {
+      api.getSeasonPlayers(season.id).then(setPlayers).catch(console.error);
+    } else {
+      api.getPlayers().then(setPlayers).catch(console.error);
+    }
+  }, [season]);
 
   const activePlayers = players.filter(p => !p.is_eliminated);
   const eliminatedPlayers = players
@@ -25,8 +31,8 @@ export default function CastPage() {
 
   return (
     <div className="cast-page">
-      <h1 className="page-title">THE CASTAWAYS</h1>
-      <p className="page-subtitle">24 returning players compete for the title of Sole Survivor</p>
+      <h1 className="page-title">THE CAST</h1>
+      <p className="page-subtitle">{season?.cast_count || players.length} players competing</p>
 
       <div className="tribe-filters">
         <button

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { api } from '../api';
 import { Tribe } from '../types';
+import { useAppContext } from './AppContext';
 
 interface TribeContextType {
   tribes: Tribe[];
@@ -19,15 +20,20 @@ const TribeContext = createContext<TribeContextType>({
 });
 
 export function TribeProvider({ children }: { children: ReactNode }) {
+  const { season } = useAppContext();
   const [tribes, setTribes] = useState<Tribe[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadTribes = useCallback(() => {
-    api.getTribes()
+    const fetcher = season
+      ? api.getSeasonTribes(season.id)
+      : api.getTribes();
+
+    fetcher
       .then(setTribes)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [season]);
 
   useEffect(() => {
     loadTribes();

@@ -2,27 +2,45 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { Team, ScoringEvent } from '../types';
+import { useAppContext } from '../context/AppContext';
 
 export default function HomePage() {
+  const { show, season, league } = useAppContext();
   const [teams, setTeams] = useState<Team[]>([]);
   const [recentEvents, setRecentEvents] = useState<ScoringEvent[]>([]);
 
+  const leagueBase = show && season && league
+    ? `/${show.slug}/${season.season_number}/leagues/${league.invite_code}`
+    : '';
+
   useEffect(() => {
-    api.getTeams().then(setTeams).catch(() => {});
-    api.getScoringEvents(10).then(setRecentEvents).catch(() => {});
-  }, []);
+    if (league) {
+      api.getLeagueTeams(league.id).then(setTeams).catch(() => {});
+    } else {
+      api.getTeams().then(setTeams).catch(() => {});
+    }
+    if (season) {
+      api.getSeasonScoringEvents(season.id, 10).then(setRecentEvents).catch(() => {});
+    } else {
+      api.getScoringEvents(10).then(setRecentEvents).catch(() => {});
+    }
+  }, [league, season]);
+
+  const showName = show ? show.name.toUpperCase() : 'FANTASY';
+  const seasonNum = season ? ` ${season.season_number}` : '';
+  const seasonSubtitle = season?.name || '';
 
   return (
     <div className="home-page">
       <section className="hero">
         <div className="hero-fire-left">🔥</div>
         <div className="hero-content">
-          <h1 className="hero-title">SURVIVOR 50</h1>
-          <p className="hero-subtitle">IN THE HANDS OF THE FANS</p>
-          <p className="hero-tagline">Fantasy Draft League</p>
+          <h1 className="hero-title">{showName}{seasonNum}</h1>
+          {seasonSubtitle && <p className="hero-subtitle">{seasonSubtitle.toUpperCase()}</p>}
+          <p className="hero-tagline">{league ? league.name : 'Fantasy Draft League'}</p>
           <div className="hero-actions">
-            <Link to="/scoreboard" className="btn btn-primary">View Scoreboard</Link>
-            <Link to="/cast" className="btn btn-secondary">Meet the Cast</Link>
+            <Link to={`${leagueBase}/scoreboard`} className="btn btn-primary">View Scoreboard</Link>
+            <Link to={`${leagueBase}/cast`} className="btn btn-secondary">Meet the Cast</Link>
           </div>
         </div>
         <div className="hero-fire-right">🔥</div>
@@ -33,7 +51,7 @@ export default function HomePage() {
           <h2 className="section-title">Standings</h2>
           <div className="standings-preview">
             {teams.slice(0, 6).map((team, idx) => (
-              <Link to={`/team/${team.id}`} key={team.id} className="standing-row">
+              <Link to={`${leagueBase}/team/${team.id}`} key={team.id} className="standing-row">
                 <span className="standing-rank">#{idx + 1}</span>
                 <span className="standing-name">{team.name}</span>
                 <span className="standing-owner">{team.owner_name}</span>
@@ -41,7 +59,7 @@ export default function HomePage() {
               </Link>
             ))}
           </div>
-          <Link to="/scoreboard" className="view-all-link">View Full Scoreboard →</Link>
+          <Link to={`${leagueBase}/scoreboard`} className="view-all-link">View Full Scoreboard &rarr;</Link>
         </section>
       )}
 
@@ -106,7 +124,7 @@ export default function HomePage() {
             <div className="rule-points">-5</div>
           </div>
         </div>
-        <Link to="/scoreboard" className="view-all-link">See all scoring rules on the scoreboard →</Link>
+        <Link to={`${leagueBase}/scoreboard`} className="view-all-link">See all scoring rules on the scoreboard &rarr;</Link>
       </section>
     </div>
   );

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { Player } from '../types';
 import { useTribes } from '../context/TribeContext';
+import { useAppContext } from '../context/AppContext';
 
 interface Idol {
   id: number;
@@ -48,6 +49,7 @@ function getInitials(name: string): string {
 }
 
 export default function GameStatePage() {
+  const { season } = useAppContext();
   const [idols, setIdols] = useState<Idol[]>([]);
   const [advantages, setAdvantages] = useState<Advantage[]>([]);
   const [alliances, setAlliances] = useState<Alliance[]>([]);
@@ -58,11 +60,16 @@ export default function GameStatePage() {
   const getPhoto = (id: number) => getPlayer(id)?.photo_url || null;
 
   useEffect(() => {
+    // These still use legacy endpoints which work fine
     api.getIdols().then(setIdols).catch(console.error);
     api.getAdvantages().then(setAdvantages).catch(console.error);
     api.getAlliances().then(setAlliances).catch(console.error);
-    api.getPlayers().then(setPlayers).catch(console.error);
-  }, []);
+    if (season) {
+      api.getSeasonPlayers(season.id).then(setPlayers).catch(console.error);
+    } else {
+      api.getPlayers().then(setPlayers).catch(console.error);
+    }
+  }, [season]);
 
   const activeIdols = idols.filter(i => i.is_active);
   const playedIdols = idols.filter(i => !i.is_active);

@@ -3,15 +3,21 @@ import { api } from '../api';
 import { Player, Team } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useTribes } from '../context/TribeContext';
+import { useAppContext } from '../context/AppContext';
 import PlayerCard from '../components/PlayerCard';
 
 export default function DraftPage() {
   const { isAdmin } = useAuth();
   const { activeTribes, getTribeColor } = useTribes();
+  const { season, league } = useAppContext();
+  const leagueId = league?.id;
+  const castCount = season?.cast_count || 24;
+  const storageKey = leagueId ? `fantasydraft_league_${leagueId}_team` : 'fantasydraft_team';
+
   const [players, setPlayers] = useState<Player[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<number>(() => {
-    const saved = localStorage.getItem('survivor50_my_team');
+    const saved = localStorage.getItem(storageKey);
     return saved ? parseInt(saved) : 0;
   });
   const [selectedPlayer, setSelectedPlayer] = useState<number>(0);
@@ -22,9 +28,17 @@ export default function DraftPage() {
   const [newOwnerName, setNewOwnerName] = useState('');
 
   const loadData = useCallback(() => {
-    api.getPlayers().then(setPlayers).catch(console.error);
-    api.getTeams().then(setTeams).catch(console.error);
-  }, []);
+    if (season) {
+      api.getSeasonPlayers(season.id).then(setPlayers).catch(console.error);
+    } else {
+      api.getPlayers().then(setPlayers).catch(console.error);
+    }
+    if (leagueId) {
+      api.getLeagueTeams(leagueId).then(setTeams).catch(console.error);
+    } else {
+      api.getTeams().then(setTeams).catch(console.error);
+    }
+  }, [season, leagueId]);
 
   useEffect(() => {
     loadData();
@@ -34,7 +48,7 @@ export default function DraftPage() {
 
   // Persist team selection
   useEffect(() => {
-    if (selectedTeam) localStorage.setItem('survivor50_my_team', String(selectedTeam));
+    if (selectedTeam) localStorage.setItem(storageKey, String(selectedTeam));
   }, [selectedTeam]);
 
   const availablePlayers = players.filter(p => !p.team_id);
@@ -54,7 +68,11 @@ export default function DraftPage() {
   const handlePick = async () => {
     if (!selectedTeam || !selectedPlayer) return;
     try {
-      await api.makePick(selectedTeam, selectedPlayer);
+      if (leagueId) {
+        await api.makeLeaguePick(leagueId, selectedTeam, selectedPlayer);
+      } else {
+        await api.makePick(selectedTeam, selectedPlayer);
+      }
       const playerName = players.find(p => p.id === selectedPlayer)?.name;
       const teamName = teams.find(t => t.id === selectedTeam)?.name;
       flash(`${playerName} drafted to ${teamName}!`);
@@ -69,7 +87,9 @@ export default function DraftPage() {
     e.preventDefault();
     if (!newTeamName || !newOwnerName) return;
     try {
-      const newTeam = await api.createTeam({ name: newTeamName, owner_name: newOwnerName });
+      const newTeam = leagueId
+        ? await api.createLeagueTeam(leagueId, { name: newTeamName, owner_name: newOwnerName })
+        : await api.createTeam({ name: newTeamName, owner_name: newOwnerName });
       setSelectedTeam(newTeam.id);
       setNewTeamName('');
       setNewOwnerName('');
@@ -83,7 +103,11 @@ export default function DraftPage() {
 
   const handleUndoPick = async (playerId: number) => {
     try {
-      await api.undoPick(playerId);
+      if (leagueId) {
+        await api.undoLeaguePick(leagueId, playerId);
+      } else {
+        await api.undoPick(playerId);
+      }
       loadData();
       flash('Pick undone');
     } catch (err: any) {
@@ -105,7 +129,11 @@ export default function DraftPage() {
   const handleResetDraft = async () => {
     if (!window.confirm('Reset the entire draft? This removes ALL picks.')) return;
     try {
-      await api.resetDraft();
+      if (leagueId) {
+        await api.resetLeagueDraft(leagueId);
+      } else {
+        await api.resetDraft();
+      }
       loadData();
       flash('Draft reset');
     } catch (err: any) {
@@ -113,7 +141,7 @@ export default function DraftPage() {
     }
   };
 
-  const draftComplete = draftedCount === 24;
+  const draftComplete = draftedCount >= castCount;
 
   return (
     <div className="draft-page">
@@ -122,12 +150,12 @@ export default function DraftPage() {
       {/* Progress bar */}
       <div className="draft-progress">
         <div className="draft-progress-bar">
-          <div className="draft-progress-fill" style={{ width: `${(draftedCount / 24) * 100}%` }} />
+          <div className="draft-progress-fill" style={{ width: `${(draftedCount / castCount) * 100}%` }} />
         </div>
         <p className="draft-progress-text">
           {draftComplete
-            ? 'The draft is complete! All 24 players have been claimed.'
-            : `${draftedCount}/24 drafted — ${availablePlayers.length} remaining`}
+            ? `The draft is complete! All ${castCount} players have been claimed.`
+            : `${draftedCount}/${castCount} drafted — ${availablePlayers.length} remaining`}
         </p>
       </div>
 

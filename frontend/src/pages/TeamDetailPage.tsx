@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../api';
+import { useAppContext } from '../context/AppContext';
 import PlayerCard from '../components/PlayerCard';
 
 interface TeamDetail {
@@ -14,8 +15,12 @@ interface TeamDetail {
 
 export default function TeamDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { show, season, league } = useAppContext();
   const [team, setTeam] = useState<TeamDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const leagueBase = show && season && league
+    ? `/${show.slug}/${season.season_number}/leagues/${league.invite_code}`
+    : '';
 
   useEffect(() => {
     if (id) {
@@ -31,7 +36,7 @@ export default function TeamDetailPage() {
 
   return (
     <div className="team-detail-page">
-      <Link to="/scoreboard" className="back-link">← Back to Scoreboard</Link>
+      <Link to={`${leagueBase}/scoreboard`} className="back-link">&larr; Back to Scoreboard</Link>
 
       <div className="team-detail-header">
         <h1 className="page-title">{team.name}</h1>

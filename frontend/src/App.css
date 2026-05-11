@@ -2493,3 +2493,128 @@ a:hover { color: var(--gold-bright); }
   .scoring-rules-grid { grid-template-columns: repeat(2, 1fr); }
   .nav-links { flex-wrap: wrap; justify-content: flex-end; }
 }
+
+/* ── Multi-show/Multi-league pages ── */
+
+.breadcrumb-link {
+  color: var(--gold);
+  text-decoration: none;
+  font-size: 0.9rem;
+  display: inline-block;
+  margin-bottom: 0.5rem;
+}
+.breadcrumb-link:hover { text-decoration: underline; }
+
+.shows-grid,
+.seasons-grid,
+.leagues-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+
+.show-card,
+.season-card,
+.league-card {
+  display: block;
+  background: var(--card-bg, #1a1a1a);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 1.5rem;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.15s, border-color 0.15s;
+}
+.show-card:hover,
+.season-card:hover,
+.league-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--gold, #D4A843);
+}
+
+.show-card-name,
+.league-card-name {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: #fff;
+}
+.show-card-desc { color: #aaa; font-size: 0.9rem; margin-bottom: 0.75rem; }
+.show-card-count { color: var(--gold, #D4A843); font-size: 0.85rem; }
+
+.season-card-number {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--gold, #D4A843);
+}
+.season-card-name { color: #ccc; font-size: 0.95rem; margin: 0.25rem 0; }
+.season-card-meta { color: #888; font-size: 0.85rem; margin-top: 0.5rem; }
+
+.badge {
+  display: inline-block;
+  background: rgba(212,168,67,0.2);
+  color: var(--gold, #D4A843);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  margin-left: 0.5rem;
+}
+.badge-active {
+  background: rgba(46,204,113,0.2);
+  color: #2ecc71;
+  margin-top: 0.5rem;
+}
+
+.league-card-meta { color: #888; font-size: 0.85rem; }
+.league-card-code { color: #666; font-size: 0.8rem; margin-top: 0.5rem; font-family: monospace; }
+
+.empty-message { color: #888; text-align: center; padding: 2rem; }
+
+.create-league-form {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: var(--card-bg, #1a1a1a);
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.create-league-form h3 { margin-bottom: 1rem; }
+
+.form-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.loading { text-align: center; padding: 3rem; color: #888; }
+.error-page { text-align: center; padding: 3rem; color: #e74c3c; }
+
+/* Admin manage tab */
+.admin-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.admin-list-item {
+  padding: 0.75rem 1rem;
+  background: rgba(255,255,255,0.05);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.admin-list-item.selected { border: 1px solid var(--gold, #D4A843); }
+.admin-form-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.form-textarea {
+  width: 100%;
+  padding: 0.75rem;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  color: #fff;
+  resize: vertical;
+}
+.text-muted { color: #888; }

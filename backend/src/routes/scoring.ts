@@ -4,6 +4,76 @@ import { authMiddleware } from '../middleware/auth';
 
 const router = Router();
 
+// ── Scoped: GET /api/shows/:showSlug/rules ──
+router.get('/shows/:showSlug/rules', async (req: Request, res: Response) => {
+  try {
+    const { showSlug } = req.params;
+    const showResult = await pool.query('SELECT id FROM shows WHERE slug = $1', [showSlug]);
+    if (showResult.rows.length === 0) {
+      res.status(404).json({ error: 'Show not found' });
+      return;
+    }
+    const result = await pool.query(
+      'SELECT * FROM scoring_rules WHERE show_id = $1 ORDER BY id',
+      [showResult.rows[0].id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch scoring rules' });
+  }
+});
+
+// ── Scoped: POST /api/shows/:showSlug/rules ──
+router.post('/shows/:showSlug/rules', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { showSlug } = req.params;
+    const { event_type, points, description, is_variable } = req.body;
+    if (!event_type || points === undefined || !description) {
+      res.status(400).json({ error: 'event_type, points, and description are required' });
+      return;
+    }
+    const showResult = await pool.query('SELECT id FROM shows WHERE slug = $1', [showSlug]);
+    if (showResult.rows.length === 0) {
+      res.status(404).json({ error: 'Show not found' });
+      return;
+    }
+    const result = await pool.query(
+      'INSERT INTO scoring_rules (show_id, event_type, points, description, is_variable) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [showResult.rows[0].id, event_type, points, description, is_variable || false]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err: any) {
+    if (err.code === '23505') {
+      res.status(400).json({ error: 'A rule with that event type already exists for this show' });
+      return;
+    }
+    console.error(err);
+    res.status(500).json({ error: 'Failed to create scoring rule' });
+  }
+});
+
+// ── Scoped: GET /api/seasons/:seasonId/scoring/events ──
+router.get('/seasons/:seasonId/scoring/events', async (req: Request, res: Response) => {
+  try {
+    const { seasonId } = req.params;
+    const { limit = 50 } = req.query;
+    const result = await pool.query(`
+      SELECT se.*, p.name as player_name, p.tribe
+      FROM scoring_events se
+      JOIN players p ON p.id = se.player_id
+      WHERE p.season_id = $1
+      ORDER BY se.created_at DESC
+      LIMIT $2
+    `, [seasonId, limit]);
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch scoring events' });
+  }
+});
+
+// ── Legacy: GET /api/scoring/rules ──
 router.get('/rules', async (_req: Request, res: Response) => {
   try {
     const result = await pool.query('SELECT * FROM scoring_rules ORDER BY id');
@@ -14,16 +84,22 @@ router.get('/rules', async (_req: Request, res: Response) => {
   }
 });
 
+// ── POST /api/scoring/rules (legacy, uses first show) ──
 router.post('/rules', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const { event_type, points, description, is_variable } = req.body;
+    const { event_type, points, description, is_variable, show_id } = req.body;
     if (!event_type || points === undefined || !description) {
       res.status(400).json({ error: 'event_type, points, and description are required' });
       return;
     }
+    let sid = show_id;
+    if (!sid) {
+      const defaultShow = await pool.query('SELECT id FROM shows ORDER BY id LIMIT 1');
+      sid = defaultShow.rows[0]?.id;
+    }
     const result = await pool.query(
-      'INSERT INTO scoring_rules (event_type, points, description, is_variable) VALUES ($1, $2, $3, $4) RETURNING *',
-      [event_type, points, description, is_variable || false]
+      'INSERT INTO scoring_rules (show_id, event_type, points, description, is_variable) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [sid, event_type, points, description, is_variable || false]
     );
     res.status(201).json(result.rows[0]);
   } catch (err: any) {
@@ -114,31 +190,49 @@ router.post('/events', authMiddleware, async (req: Request, res: Response) => {
     let points: number;
 
     if (event_type === 'placement') {
-      // For placement, custom_points should be the placement number
-      // Points = 25 - placement (winner gets 24, first boot gets 1)
       const placement = custom_points;
-      if (!placement || placement < 1 || placement > 24) {
-        res.status(400).json({ error: 'Placement must be between 1 and 24' });
+      // Get cast_count from the player's season
+      const seasonResult = await pool.query(
+        'SELECT s.cast_count FROM seasons s JOIN players p ON p.season_id = s.id WHERE p.id = $1',
+        [player_id]
+      );
+      const castCount = seasonResult.rows[0]?.cast_count || 24;
+
+      if (!placement || placement < 1 || placement > castCount) {
+        res.status(400).json({ error: `Placement must be between 1 and ${castCount}` });
         return;
       }
-      points = 25 - placement;
+      points = castCount + 1 - placement;
 
-      // Also update the player's placement and elimination status
       await pool.query(
         'UPDATE players SET placement = $1, is_eliminated = $2 WHERE id = $3',
         [placement, placement > 1, player_id]
       );
     } else {
-      // Look up points from scoring rules
-      const ruleResult = await pool.query(
-        'SELECT points FROM scoring_rules WHERE event_type = $1',
-        [event_type]
-      );
+      // Look up points from scoring rules (scoped by the player's show)
+      const ruleResult = await pool.query(`
+        SELECT sr.points FROM scoring_rules sr
+        JOIN shows sh ON sh.id = sr.show_id
+        JOIN seasons s ON s.show_id = sh.id
+        JOIN players p ON p.season_id = s.id
+        WHERE sr.event_type = $1 AND p.id = $2
+        LIMIT 1
+      `, [event_type, player_id]);
+
       if (ruleResult.rows.length === 0) {
-        res.status(400).json({ error: 'Unknown event type' });
-        return;
+        // Fallback: try global lookup for backward compat
+        const fallback = await pool.query(
+          'SELECT points FROM scoring_rules WHERE event_type = $1 LIMIT 1',
+          [event_type]
+        );
+        if (fallback.rows.length === 0) {
+          res.status(400).json({ error: 'Unknown event type' });
+          return;
+        }
+        points = parseFloat(fallback.rows[0].points);
+      } else {
+        points = parseFloat(ruleResult.rows[0].points);
       }
-      points = parseFloat(ruleResult.rows[0].points);
     }
 
     const result = await pool.query(
@@ -146,7 +240,6 @@ router.post('/events', authMiddleware, async (req: Request, res: Response) => {
       [player_id, event_type, points, episode || null, notes || null]
     );
 
-    // Get player name for response
     const playerResult = await pool.query('SELECT name FROM players WHERE id = $1', [player_id]);
 
     res.status(201).json({
@@ -170,7 +263,6 @@ router.delete('/events/:id', authMiddleware, async (req: Request, res: Response)
   }
 });
 
-// Bulk add scoring events (e.g., tribe wins immunity for all tribe members)
 router.post('/events/bulk', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { player_ids, event_type, episode, notes } = req.body;
@@ -179,8 +271,9 @@ router.post('/events/bulk', authMiddleware, async (req: Request, res: Response) 
       return;
     }
 
+    // Look up points from scoring rules
     const ruleResult = await pool.query(
-      'SELECT points FROM scoring_rules WHERE event_type = $1',
+      'SELECT points FROM scoring_rules WHERE event_type = $1 LIMIT 1',
       [event_type]
     );
     if (ruleResult.rows.length === 0) {

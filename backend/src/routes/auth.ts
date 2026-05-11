@@ -3,13 +3,13 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
 const router = Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'survivor50-secret-key';
+const JWT_SECRET = process.env.JWT_SECRET || 'fantasydraft-secret-key';
 
 // Hash is generated at startup from ADMIN_PASSWORD env var
 let adminPasswordHash: string;
 
 export async function initAuth() {
-  const password = process.env.ADMIN_PASSWORD || 'survivor50admin';
+  const password = process.env.ADMIN_PASSWORD || 'fantasydraft-admin';
   adminPasswordHash = await bcrypt.hash(password, 10);
 }
 

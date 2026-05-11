@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTribes } from '../context/TribeContext';
 import { api } from '../api';
-import { Player, Team, ScoringRule, ScoringEvent, Tribe } from '../types';
+import { Player, Team, ScoringRule, ScoringEvent, Tribe, Show, Season } from '../types';
 import PlayerCard from '../components/PlayerCard';
 
-type AdminTab = 'scoring' | 'challenges' | 'eliminate' | 'teams' | 'draft' | 'tribes' | 'gamestate' | 'summary';
+type AdminTab = 'scoring' | 'challenges' | 'eliminate' | 'teams' | 'draft' | 'tribes' | 'gamestate' | 'summary' | 'manage';
 
 export default function AdminPage() {
   const { isAdmin, loading: authLoading } = useAuth();
@@ -50,6 +50,9 @@ export default function AdminPage() {
         <button className={`tab ${tab === 'summary' ? 'active' : ''}`} onClick={() => setTab('summary')}>
           Recap
         </button>
+        <button className={`tab ${tab === 'manage' ? 'active' : ''}`} onClick={() => setTab('manage')}>
+          Shows/Seasons
+        </button>
       </div>
 
       {tab === 'scoring' && <ScoringTab />}
@@ -60,6 +63,7 @@ export default function AdminPage() {
       {tab === 'tribes' && <TribesTab />}
       {tab === 'gamestate' && <GameStateTab />}
       {tab === 'summary' && <SummaryTab />}
+      {tab === 'manage' && <ManageShowsTab />}
     </div>
   );
 }
@@ -103,8 +107,8 @@ function EliminateTab() {
   const handleEliminate = async () => {
     if (!targetPlayer || !placement) return;
     const placementNum = parseInt(placement);
-    if (placementNum < 1 || placementNum > 24) {
-      setMessage('Error: Placement must be between 1 and 24');
+    if (placementNum < 1) {
+      setMessage('Error: Placement must be at least 1');
       return;
     }
 
@@ -116,7 +120,7 @@ function EliminateTab() {
         event_type: 'placement',
         custom_points: placementNum,
         episode: episode ? parseInt(episode) : undefined,
-        notes: `Eliminated — placed ${placementNum} of 24`,
+        notes: `Eliminated — placed ${placementNum}`,
       });
 
       // 2. Add votes received scoring events (one per vote, each at -0.25)
@@ -223,9 +227,9 @@ function EliminateTab() {
                 className="form-input"
                 placeholder="e.g. 18"
               />
-              {placement && parseInt(placement) >= 1 && parseInt(placement) <= 24 && (
+              {placement && parseInt(placement) >= 1 && (
                 <div className="placement-preview">
-                  Placement points: +{25 - parseInt(placement)}
+                  Placement points calculated by backend (cast_count + 1 - {placement})
                 </div>
               )}
             </div>
@@ -308,14 +312,8 @@ function EliminateTab() {
 
             {placement && parseInt(placement) >= 1 && (
               <div className="eliminate-summary">
-                <strong>Summary:</strong> {targetPlayer.name} finishes {placement}{placement === '1' ? 'st' : placement === '2' ? 'nd' : placement === '3' ? 'rd' : 'th'} →{' '}
-                <span className="positive">+{25 - parseInt(placement)} placement pts</span>
-                {votesReceived && parseInt(votesReceived) > 0 && (
-                  <>, <span className="negative">{(parseInt(votesReceived) * -0.25).toFixed(2)} vote pts</span></>
-                )}
-                {' '}= <strong>{(
-                  (25 - parseInt(placement)) + (parseInt(votesReceived || '0') * -0.25)
-                ).toFixed(2)} net pts</strong>
+                <strong>Summary:</strong> {targetPlayer.name} finishes {placement}{placement === '1' ? 'st' : placement === '2' ? 'nd' : placement === '3' ? 'rd' : 'th'}
+                {' '}&rarr; placement points + vote penalties calculated by backend
               </div>
             )}
 
@@ -592,7 +590,7 @@ function ScoringTab() {
             />
             {placement && (
               <div className="placement-preview">
-                Points awarded: {25 - parseInt(placement || '0')}
+                Points calculated dynamically based on season cast count
               </div>
             )}
           </div>
@@ -2162,6 +2160,191 @@ function ChallengesTab() {
       >
         {submitting ? 'Submitting...' : 'Log Challenge Results'}
       </button>
+    </div>
+  );
+}
+
+// ── Shows/Seasons/Cast Management Tab ──
+
+function ManageShowsTab() {
+  const [shows, setShows] = useState<any[]>([]);
+  const [seasons, setSeasons] = useState<any[]>([]);
+  const [selectedShowSlug, setSelectedShowSlug] = useState('');
+  const [selectedSeasonId, setSelectedSeasonId] = useState<number | null>(null);
+  const [message, setMessage] = useState('');
+
+  // New show form
+  const [newShowName, setNewShowName] = useState('');
+  const [newShowSlug, setNewShowSlug] = useState('');
+  const [newShowDesc, setNewShowDesc] = useState('');
+
+  // New season form
+  const [newSeasonNum, setNewSeasonNum] = useState('');
+  const [newSeasonName, setNewSeasonName] = useState('');
+  const [newSeasonCastCount, setNewSeasonCastCount] = useState('');
+
+  // Cast import
+  const [castJson, setCastJson] = useState('');
+  const [importPreview, setImportPreview] = useState<any[] | null>(null);
+
+  const flash = (msg: string) => { setMessage(msg); setTimeout(() => setMessage(''), 4000); };
+
+  const loadShows = () => { api.getShows().then(setShows).catch(console.error); };
+
+  useEffect(() => { loadShows(); }, []);
+
+  useEffect(() => {
+    if (selectedShowSlug) {
+      api.getSeasons(selectedShowSlug).then(setSeasons).catch(console.error);
+    } else {
+      setSeasons([]);
+    }
+  }, [selectedShowSlug]);
+
+  const handleCreateShow = async () => {
+    if (!newShowName || !newShowSlug) return;
+    try {
+      await api.createShow({ name: newShowName, slug: newShowSlug, description: newShowDesc || undefined });
+      flash('Show created!');
+      setNewShowName(''); setNewShowSlug(''); setNewShowDesc('');
+      loadShows();
+    } catch (err: any) { flash(`Error: ${err.message}`); }
+  };
+
+  const handleCreateSeason = async () => {
+    if (!selectedShowSlug || !newSeasonNum) return;
+    try {
+      await api.createSeason(selectedShowSlug, {
+        season_number: parseInt(newSeasonNum),
+        name: newSeasonName || undefined,
+        cast_count: newSeasonCastCount ? parseInt(newSeasonCastCount) : undefined,
+      });
+      flash('Season created!');
+      setNewSeasonNum(''); setNewSeasonName(''); setNewSeasonCastCount('');
+      api.getSeasons(selectedShowSlug).then(setSeasons);
+    } catch (err: any) { flash(`Error: ${err.message}`); }
+  };
+
+  const handleParseJson = () => {
+    try {
+      const parsed = JSON.parse(castJson);
+      const arr = Array.isArray(parsed) ? parsed : [parsed];
+      setImportPreview(arr);
+    } catch {
+      flash('Error: Invalid JSON');
+      setImportPreview(null);
+    }
+  };
+
+  const handleImport = async () => {
+    if (!selectedSeasonId || !importPreview) return;
+    try {
+      await api.bulkImportPlayers(selectedSeasonId, importPreview);
+      flash(`Imported ${importPreview.length} players!`);
+      setCastJson('');
+      setImportPreview(null);
+    } catch (err: any) { flash(`Error: ${err.message}`); }
+  };
+
+  return (
+    <div className="admin-section">
+      {message && <div className={`toast ${message.startsWith('Error') ? 'error' : 'success'}`}>{message}</div>}
+
+      {/* ── Shows ── */}
+      <h2 className="section-title">Shows</h2>
+      <div className="admin-list">
+        {shows.map(s => (
+          <div key={s.id} className="admin-list-item">
+            <strong>{s.name}</strong> <span className="text-muted">({s.slug})</span>
+            <span className="badge">{s.season_count || 0} seasons</span>
+          </div>
+        ))}
+      </div>
+      <div className="admin-form-row" style={{ marginTop: '1rem' }}>
+        <input className="form-input" placeholder="Show name" value={newShowName} onChange={e => { setNewShowName(e.target.value); setNewShowSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-')); }} />
+        <input className="form-input" placeholder="Slug" value={newShowSlug} onChange={e => setNewShowSlug(e.target.value)} />
+        <input className="form-input" placeholder="Description (optional)" value={newShowDesc} onChange={e => setNewShowDesc(e.target.value)} />
+        <button className="btn btn-primary" onClick={handleCreateShow} disabled={!newShowName || !newShowSlug}>Create Show</button>
+      </div>
+
+      {/* ── Seasons ── */}
+      <h2 className="section-title" style={{ marginTop: '2rem' }}>Seasons</h2>
+      <select className="form-input" value={selectedShowSlug} onChange={e => { setSelectedShowSlug(e.target.value); setSelectedSeasonId(null); }}>
+        <option value="">Select a show...</option>
+        {shows.map(s => <option key={s.id} value={s.slug}>{s.name}</option>)}
+      </select>
+
+      {selectedShowSlug && (
+        <>
+          <div className="admin-list" style={{ marginTop: '1rem' }}>
+            {seasons.map(s => (
+              <div
+                key={s.id}
+                className={`admin-list-item ${selectedSeasonId === s.id ? 'selected' : ''}`}
+                onClick={() => setSelectedSeasonId(s.id)}
+                style={{ cursor: 'pointer' }}
+              >
+                <strong>Season {s.season_number}</strong>
+                {s.name && <span> — {s.name}</span>}
+                <span className="badge">{s.cast_count} players</span>
+                <span className="badge">{s.league_count || 0} leagues</span>
+              </div>
+            ))}
+            {seasons.length === 0 && <div className="empty-state">No seasons yet</div>}
+          </div>
+
+          <div className="admin-form-row" style={{ marginTop: '1rem' }}>
+            <input className="form-input" type="number" placeholder="Season #" value={newSeasonNum} onChange={e => setNewSeasonNum(e.target.value)} />
+            <input className="form-input" placeholder="Season name (optional)" value={newSeasonName} onChange={e => setNewSeasonName(e.target.value)} />
+            <input className="form-input" type="number" placeholder="Cast count" value={newSeasonCastCount} onChange={e => setNewSeasonCastCount(e.target.value)} />
+            <button className="btn btn-primary" onClick={handleCreateSeason} disabled={!newSeasonNum}>Create Season</button>
+          </div>
+        </>
+      )}
+
+      {/* ── Cast Import ── */}
+      {selectedSeasonId && (
+        <>
+          <h2 className="section-title" style={{ marginTop: '2rem' }}>Cast Import</h2>
+          <p className="text-muted" style={{ marginBottom: '0.5rem' }}>
+            Paste a JSON array of players. Each player needs: name, tribe. Optional: nickname, original_seasons, photo_url.
+          </p>
+          <textarea
+            className="form-textarea"
+            rows={8}
+            placeholder={`[\n  { "name": "Player Name", "tribe": "Tribe A", "original_seasons": "1, 2" },\n  ...\n]`}
+            value={castJson}
+            onChange={e => setCastJson(e.target.value)}
+            style={{ width: '100%', fontFamily: 'monospace', fontSize: '0.85rem' }}
+          />
+          <button className="btn btn-secondary" onClick={handleParseJson} style={{ marginTop: '0.5rem' }} disabled={!castJson.trim()}>
+            Preview Import
+          </button>
+
+          {importPreview && (
+            <div style={{ marginTop: '1rem' }}>
+              <h3>{importPreview.length} players to import:</h3>
+              <table className="log-table" style={{ marginTop: '0.5rem' }}>
+                <thead>
+                  <tr><th>Name</th><th>Tribe</th><th>Seasons</th></tr>
+                </thead>
+                <tbody>
+                  {importPreview.map((p, i) => (
+                    <tr key={i}>
+                      <td>{p.name}{p.nickname ? ` (${p.nickname})` : ''}</td>
+                      <td>{p.tribe}</td>
+                      <td>{p.original_seasons || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <button className="btn btn-primary" onClick={handleImport} style={{ marginTop: '0.5rem' }}>
+                Import {importPreview.length} Players
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
