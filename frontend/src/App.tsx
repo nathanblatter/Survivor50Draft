@@ -48,7 +48,12 @@ export default function App() {
       </main>
       <footer className="footer">
         <div className="footer-inner">
-          <p>Fantasy Draft League</p>
+          <p className="footer-brand">🔥 Fantasy Draft League</p>
+          <p className="footer-links">
+            <a href="/" className="footer-link">Browse Shows</a>
+            <span className="footer-sep">·</span>
+            <a href="/login" className="footer-link">Admin</a>
+          </p>
         </div>
       </footer>
     </div>

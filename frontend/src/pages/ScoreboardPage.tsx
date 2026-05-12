@@ -4,6 +4,7 @@ import { api } from '../api';
 import { Team, ScoringRule, ScoringEvent } from '../types';
 import { useAppContext } from '../context/AppContext';
 import PlayerCard from '../components/PlayerCard';
+import ShareButton from '../components/ShareButton';
 
 export default function ScoreboardPage() {
   const { show, season, league } = useAppContext();
@@ -34,6 +35,21 @@ export default function ScoreboardPage() {
     }
   }, [league, show, season]);
 
+  const showName = show ? show.name.toUpperCase() : 'FANTASY';
+  const seasonNum = season ? ` ${season.season_number}` : '';
+
+  const formatStandingsText = () => {
+    const title = `🔥 ${showName}${seasonNum}${league ? ` — ${league.name}` : ''} Scoreboard`;
+    const divider = '─'.repeat(30);
+    const lines = teams.map((t, i) => {
+      const medal = i === 0 ? '👑' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`;
+      const roster = t.players?.map(p => `  • ${p.name} (${Number(p.total_points).toFixed(1)})`).join('\n') || '';
+      return `${medal} ${t.name} — ${t.total_score.toFixed(1)} pts\n   ${t.owner_name}\n${roster}`;
+    });
+    const url = window.location.origin + leagueBase;
+    return `${title}\n${divider}\n${lines.join('\n\n')}\n\n${url}`;
+  };
+
   return (
     <div className="scoreboard-page">
       <h1 className="page-title">SCOREBOARD</h1>
@@ -52,6 +68,11 @@ export default function ScoreboardPage() {
 
       {activeTab === 'standings' && (
         <div className="standings">
+          {teams.length > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+              <ShareButton getText={formatStandingsText} label="Share Standings" />
+            </div>
+          )}
           {teams.length === 0 ? (
             <div className="empty-state">No teams yet. The draft hasn't started!</div>
           ) : (

@@ -1,13 +1,31 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
-import { Team, ScoringEvent } from '../types';
+import { Team, ScoringEvent, ScoringRule } from '../types';
 import { useAppContext } from '../context/AppContext';
+import ShareButton from '../components/ShareButton';
+
+const RULE_ICONS: Record<string, string> = {
+  merge: '🏝️', jury: '⚖️', final_tribal: '🏆', ftc: '🏆',
+  vote_correct: '🗳️', idol_found: '🗿', immunity_win: '🛡️',
+  votes_received: '📝', idoled_out: '💀', reward_win: '🎁',
+  advantage_found: '⚡', challenge_win: '🏅', elimination: '🔥',
+  placement: '📊', sole_survivor: '👑',
+};
+
+function getRuleIcon(eventType: string): string {
+  const key = eventType.toLowerCase();
+  for (const [pattern, icon] of Object.entries(RULE_ICONS)) {
+    if (key.includes(pattern)) return icon;
+  }
+  return '📌';
+}
 
 export default function HomePage() {
   const { show, season, league } = useAppContext();
   const [teams, setTeams] = useState<Team[]>([]);
   const [recentEvents, setRecentEvents] = useState<ScoringEvent[]>([]);
+  const [rules, setRules] = useState<ScoringRule[]>([]);
 
   const leagueBase = show && season && league
     ? `/${show.slug}/${season.season_number}/leagues/${league.invite_code}`
@@ -24,11 +42,32 @@ export default function HomePage() {
     } else {
       api.getScoringEvents(10).then(setRecentEvents).catch(() => {});
     }
-  }, [league, season]);
+    if (show) {
+      api.getShowScoringRules(show.slug).then(setRules).catch(() => {});
+    } else {
+      api.getScoringRules().then(setRules).catch(() => {});
+    }
+  }, [league, season, show]);
 
   const showName = show ? show.name.toUpperCase() : 'FANTASY';
   const seasonNum = season ? ` ${season.season_number}` : '';
   const seasonSubtitle = season?.name || '';
+
+  const formatStandingsText = () => {
+    const title = `${showName}${seasonNum}${league ? ` — ${league.name}` : ''} Standings`;
+    const lines = teams.map((t, i) => `${i + 1}. ${t.name} (${t.owner_name}) — ${t.total_score.toFixed(1)} pts`);
+    const url = window.location.origin + leagueBase;
+    return `${title}\n${lines.join('\n')}\n\n${url}`;
+  };
+
+  const formatActivityText = () => {
+    const title = `${showName}${seasonNum} — Recent Scoring`;
+    const lines = recentEvents.map(e =>
+      `${e.player_name}: ${e.event_type.replace(/_/g, ' ')} (${e.points > 0 ? '+' : ''}${e.points})`
+    );
+    const url = window.location.origin + leagueBase;
+    return `${title}\n${lines.join('\n')}\n\n${url}`;
+  };
 
   return (
     <div className="home-page">
@@ -48,7 +87,10 @@ export default function HomePage() {
 
       {teams.length > 0 && (
         <section className="section">
-          <h2 className="section-title">Standings</h2>
+          <div className="section-header">
+            <h2 className="section-title">Standings</h2>
+            <ShareButton getText={formatStandingsText} label="Share Standings" />
+          </div>
           <div className="standings-preview">
             {teams.slice(0, 6).map((team, idx) => (
               <Link to={`${leagueBase}/team/${team.id}`} key={team.id} className="standing-row">
@@ -65,7 +107,10 @@ export default function HomePage() {
 
       {recentEvents.length > 0 && (
         <section className="section">
-          <h2 className="section-title">Recent Activity</h2>
+          <div className="section-header">
+            <h2 className="section-title">Recent Activity</h2>
+            <ShareButton getText={formatActivityText} label="Share Activity" />
+          </div>
           <div className="activity-feed">
             {recentEvents.map(event => (
               <div key={event.id} className="activity-item">
@@ -83,48 +128,23 @@ export default function HomePage() {
       <section className="section">
         <h2 className="section-title">Scoring Rules</h2>
         <div className="scoring-rules-grid">
-          <div className="rule-card">
-            <div className="rule-icon">🏝️</div>
-            <div className="rule-name">Makes the Merge</div>
-            <div className="rule-points">+3</div>
-          </div>
-          <div className="rule-card">
-            <div className="rule-icon">⚖️</div>
-            <div className="rule-name">Makes the Jury</div>
-            <div className="rule-points">+5</div>
-          </div>
-          <div className="rule-card">
-            <div className="rule-icon">🏆</div>
-            <div className="rule-name">Final Tribal</div>
-            <div className="rule-points">+7</div>
-          </div>
-          <div className="rule-card">
-            <div className="rule-icon">🗳️</div>
-            <div className="rule-name">In on the Vote</div>
-            <div className="rule-points">+1</div>
-          </div>
-          <div className="rule-card">
-            <div className="rule-icon">🗿</div>
-            <div className="rule-name">Finds Idol</div>
-            <div className="rule-points">+2</div>
-          </div>
-          <div className="rule-card">
-            <div className="rule-icon">🛡️</div>
-            <div className="rule-name">Wins Immunity</div>
-            <div className="rule-points">+3</div>
-          </div>
-          <div className="rule-card negative">
-            <div className="rule-icon">📝</div>
-            <div className="rule-name">Receives Votes</div>
-            <div className="rule-points">-0.25</div>
-          </div>
-          <div className="rule-card negative">
-            <div className="rule-icon">💀</div>
-            <div className="rule-name">Idoled Out</div>
-            <div className="rule-points">-5</div>
-          </div>
+          {rules.length > 0 ? (
+            rules.map(rule => (
+              <div key={rule.id} className={`rule-card ${rule.points < 0 ? 'negative' : ''}`}>
+                <div className="rule-icon">{getRuleIcon(rule.event_type)}</div>
+                <div className="rule-name">{rule.description}</div>
+                <div className="rule-points">
+                  {rule.is_variable ? 'Var' : `${rule.points > 0 ? '+' : ''}${rule.points}`}
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="empty-state" style={{ gridColumn: '1 / -1' }}>
+              Scoring rules will appear once the admin configures them.
+            </div>
+          )}
         </div>
-        <Link to={`${leagueBase}/scoreboard`} className="view-all-link">See all scoring rules on the scoreboard &rarr;</Link>
+        <Link to={`${leagueBase}/scoreboard`} className="view-all-link">See full scoring details on the scoreboard &rarr;</Link>
       </section>
     </div>
   );

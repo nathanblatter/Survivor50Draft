@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { api } from '../api';
 import { useAppContext } from '../context/AppContext';
 import PlayerCard from '../components/PlayerCard';
+import ShareButton from '../components/ShareButton';
 
 interface TeamDetail {
   id: number;
@@ -34,6 +35,19 @@ export default function TeamDetailPage() {
   if (loading) return <div className="loading">Loading...</div>;
   if (!team) return <div className="error-state">Team not found</div>;
 
+  const showName = show ? show.name.toUpperCase() : '';
+  const seasonNum = season ? ` ${season.season_number}` : '';
+
+  const formatTeamText = () => {
+    const title = `🔥 ${team.name} — ${team.total_score.toFixed(1)} pts`;
+    const subtitle = `Manager: ${team.owner_name}`;
+    const roster = team.players.map(p =>
+      `• ${p.name} (${p.tribe}) — ${Number(p.total_points).toFixed(1)} pts${p.is_eliminated ? ' [OUT]' : ''}`
+    ).join('\n');
+    const url = window.location.origin + leagueBase + `/team/${team.id}`;
+    return `${title}\n${subtitle}\n${showName}${seasonNum}${league ? ` — ${league.name}` : ''}\n\nRoster:\n${roster}\n\n${url}`;
+  };
+
   return (
     <div className="team-detail-page">
       <Link to={`${leagueBase}/scoreboard`} className="back-link">&larr; Back to Scoreboard</Link>
@@ -44,6 +58,9 @@ export default function TeamDetailPage() {
         <div className="team-total-score">
           <span className="big-score">{team.total_score.toFixed(1)}</span>
           <span className="score-label">Total Points</span>
+        </div>
+        <div style={{ marginTop: '1rem' }}>
+          <ShareButton getText={formatTeamText} label="Share Team" />
         </div>
       </div>
 

@@ -69,17 +69,31 @@ export default function SeasonPage() {
         ) : (
           <div className="leagues-grid">
             {leagues.map(league => (
-              <Link
-                to={`/${showSlug}/${seasonNum}/leagues/${league.invite_code}`}
-                key={league.id}
-                className="league-card"
-              >
-                <h3 className="league-card-name">{league.name}</h3>
-                <div className="league-card-meta">
-                  {league.team_count || 0} team{(league.team_count || 0) !== 1 ? 's' : ''}
-                </div>
-                <div className="league-card-code">Code: {league.invite_code}</div>
-              </Link>
+              <div key={league.id} className="league-card-wrapper">
+                <Link
+                  to={`/${showSlug}/${seasonNum}/leagues/${league.invite_code}`}
+                  className="league-card"
+                >
+                  <h3 className="league-card-name">{league.name}</h3>
+                  <div className="league-card-meta">
+                    {league.team_count || 0} team{(league.team_count || 0) !== 1 ? 's' : ''}
+                  </div>
+                  <div className="league-card-code">Code: {league.invite_code}</div>
+                </Link>
+                <button
+                  className="league-copy-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const url = `${window.location.origin}/${showSlug}/${seasonNum}/leagues/${league.invite_code}`;
+                    navigator.clipboard.writeText(url);
+                    const btn = e.currentTarget;
+                    btn.textContent = '✓ Copied!';
+                    setTimeout(() => { btn.textContent = '🔗 Copy Link'; }, 2000);
+                  }}
+                >
+                  🔗 Copy Link
+                </button>
+              </div>
             ))}
           </div>
         )}
