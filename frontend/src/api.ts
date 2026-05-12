@@ -135,6 +135,10 @@ export const api = {
     request<{ episode: number; summary: string; event_count: number }>(`/leagues/${leagueId}/summary/generate`, {
       method: 'POST', body: JSON.stringify({ episode }),
     }),
+  generateTeamSeasonRecap: (leagueId: number, teamId: number) =>
+    request<{ team_name: string; owner_name: string; rank: number; total_score: number; recap: string }>(
+      `/leagues/${leagueId}/teams/${teamId}/recap/generate`, { method: 'POST' }
+    ),
 
   // ── Game State (legacy — works for backward compat) ──
   getIdols: () => request<any[]>('/gamestate/idols'),
