@@ -353,6 +353,12 @@ function EliminateTab() {
 }
 
 function ScoringTab() {
+  // Show / season context
+  const [shows, setShows] = useState<Show[]>([]);
+  const [seasons, setSeasons] = useState<Season[]>([]);
+  const [selectedShowSlug, setSelectedShowSlug] = useState('');
+  const [selectedSeasonId, setSelectedSeasonId] = useState<number>(0);
+
   const [players, setPlayers] = useState<Player[]>([]);
   const [rules, setRules] = useState<ScoringRule[]>([]);
   const [events, setEvents] = useState<ScoringEvent[]>([]);
@@ -378,13 +384,37 @@ function ScoringTab() {
   const [newRuleVariable, setNewRuleVariable] = useState(false);
 
   useEffect(() => {
-    loadData();
+    api.getShows().then(setShows).catch(console.error);
+    api.getScoringRules().then(setRules).catch(console.error);
   }, []);
 
-  const loadData = () => {
-    api.getPlayers().then(setPlayers).catch(console.error);
-    api.getScoringRules().then(setRules).catch(console.error);
-    api.getScoringEvents(30).then(setEvents).catch(console.error);
+  useEffect(() => {
+    if (selectedShowSlug) {
+      api.getSeasons(selectedShowSlug).then(setSeasons).catch(console.error);
+    } else {
+      setSeasons([]);
+    }
+    setSelectedSeasonId(0);
+    setPlayers([]);
+    setEvents([]);
+  }, [selectedShowSlug]);
+
+  useEffect(() => {
+    if (selectedSeasonId) {
+      api.getSeasonPlayers(selectedSeasonId).then(setPlayers).catch(console.error);
+      api.getSeasonScoringEvents(selectedSeasonId, 30).then(setEvents).catch(console.error);
+    } else {
+      setPlayers([]);
+      setEvents([]);
+    }
+    setSelectedPlayer(0);
+    setSelectedPlayers([]);
+  }, [selectedSeasonId]);
+
+  const reloadEvents = () => {
+    if (selectedSeasonId) {
+      api.getSeasonScoringEvents(selectedSeasonId, 30).then(setEvents).catch(console.error);
+    }
   };
 
   const togglePlayerSelection = (id: number) => {
@@ -432,7 +462,7 @@ function ScoringTab() {
       setEpisode('');
       setNotes('');
       setPlacement('');
-      loadData();
+      reloadEvents();
     } catch (err: any) {
       setMessage(`Error: ${err.message}`);
     }
@@ -442,7 +472,7 @@ function ScoringTab() {
   const handleDeleteEvent = async (id: number) => {
     try {
       await api.deleteScoringEvent(id);
-      loadData();
+      reloadEvents();
       setMessage('Event deleted');
       setTimeout(() => setMessage(''), 2000);
     } catch (err: any) {
@@ -477,7 +507,7 @@ function ScoringTab() {
         is_variable: editRuleVariable,
       });
       setEditingRuleId(null);
-      loadData();
+      api.getScoringRules().then(setRules).catch(console.error);
       setMessage('Rule updated!');
       setTimeout(() => setMessage(''), 3000);
     } catch (err: any) {
@@ -489,7 +519,7 @@ function ScoringTab() {
     if (!window.confirm('Delete this scoring rule? Events using this rule will NOT be deleted.')) return;
     try {
       await api.deleteScoringRule(id);
-      loadData();
+      api.getScoringRules().then(setRules).catch(console.error);
       setMessage('Rule deleted');
       setTimeout(() => setMessage(''), 2000);
     } catch (err: any) {
@@ -515,7 +545,7 @@ function ScoringTab() {
       setNewRulePoints('');
       setNewRuleDesc('');
       setNewRuleVariable(false);
-      loadData();
+      api.getScoringRules().then(setRules).catch(console.error);
       setMessage('Rule created!');
       setTimeout(() => setMessage(''), 3000);
     } catch (err: any) {
@@ -527,6 +557,47 @@ function ScoringTab() {
 
   return (
     <div className="admin-tab-content">
+      {/* Show / Season selector */}
+      <div className="scoring-form">
+        <h3>Season Context</h3>
+        <div className="form-row">
+          <div className="form-group">
+            <label>Show</label>
+            <select
+              value={selectedShowSlug}
+              onChange={e => setSelectedShowSlug(e.target.value)}
+              className="form-select"
+            >
+              <option value="">-- Select Show --</option>
+              {shows.map(s => (
+                <option key={s.slug} value={s.slug}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Season</label>
+            <select
+              value={selectedSeasonId}
+              onChange={e => setSelectedSeasonId(parseInt(e.target.value))}
+              className="form-select"
+              disabled={!selectedShowSlug}
+            >
+              <option value={0}>-- Select Season --</option>
+              {seasons.map(s => (
+                <option key={s.id} value={s.id}>
+                  Season {s.season_number}{s.name ? ` — ${s.name}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {!selectedSeasonId ? (
+        <div className="summary-empty">
+          <p>Select a show and season above to load players.</p>
+        </div>
+      ) : (
       <form onSubmit={handleSubmit} className="scoring-form">
         <div className="form-row">
           <label className="form-toggle">
@@ -821,6 +892,7 @@ function ScoringTab() {
           </div>
         )}
       </div>
+      )} {/* end selectedSeasonId */}
     </div>
   );
 }
