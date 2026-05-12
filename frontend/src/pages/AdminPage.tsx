@@ -1736,13 +1736,22 @@ function GameStateTab() {
 }
 
 function SummaryTab() {
+  // Show / season / league context
+  const [shows, setShows] = useState<Show[]>([]);
+  const [seasons, setSeasons] = useState<Season[]>([]);
+  const [leagues, setLeagues] = useState<any[]>([]);
+  const [selectedShowSlug, setSelectedShowSlug] = useState('');
+  const [selectedSeasonId, setSelectedSeasonId] = useState<number>(0);
+  const [selectedLeagueId, setSelectedLeagueId] = useState<number>(0);
+
+  // Episode recap state
   const [episodes, setEpisodes] = useState<{ episode: number; event_count: number }[]>([]);
   const [selectedEp, setSelectedEp] = useState<number>(0);
   const [events, setEvents] = useState<ScoringEvent[]>([]);
   const [summary, setSummary] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [message, setMessage] = useState('');
+  const [epLoading, setEpLoading] = useState(false);
+  const [epCopied, setEpCopied] = useState(false);
+  const [epMessage, setEpMessage] = useState('');
 
   // Season recap state
   const [teams, setTeams] = useState<Team[]>([]);
@@ -1752,64 +1761,85 @@ function SummaryTab() {
   const [recapCopied, setRecapCopied] = useState(false);
   const [recapMessage, setRecapMessage] = useState('');
 
-  useEffect(() => {
-    api.getEpisodesWithEvents().then(setEpisodes).catch(console.error);
-    api.getTeams().then(setTeams).catch(console.error);
-  }, []);
+  useEffect(() => { api.getShows().then(setShows).catch(console.error); }, []);
 
   useEffect(() => {
-    if (selectedEp > 0) {
-      api.getEpisodeEvents(selectedEp).then(setEvents).catch(console.error);
+    if (selectedShowSlug) {
+      api.getSeasons(selectedShowSlug).then(setSeasons).catch(console.error);
+    } else {
+      setSeasons([]);
+    }
+    setSelectedSeasonId(0);
+    setSelectedLeagueId(0);
+  }, [selectedShowSlug]);
+
+  useEffect(() => {
+    if (selectedSeasonId) {
+      api.getLeagues(selectedSeasonId).then(setLeagues).catch(console.error);
+    } else {
+      setLeagues([]);
+    }
+    setSelectedLeagueId(0);
+  }, [selectedSeasonId]);
+
+  useEffect(() => {
+    if (selectedLeagueId) {
+      api.getLeagueEpisodesWithEvents(selectedLeagueId).then(setEpisodes).catch(console.error);
+      api.getLeagueTeams(selectedLeagueId).then(setTeams).catch(console.error);
+    } else {
+      setEpisodes([]);
+      setTeams([]);
+    }
+    setSelectedEp(0);
+    setSummary('');
+    setSelectedTeamId(0);
+    setRecap('');
+  }, [selectedLeagueId]);
+
+  useEffect(() => {
+    if (selectedLeagueId && selectedEp > 0) {
+      api.getLeagueEpisodeEvents(selectedLeagueId, selectedEp).then(setEvents).catch(console.error);
       setSummary('');
     } else {
       setEvents([]);
       setSummary('');
     }
-  }, [selectedEp]);
+  }, [selectedLeagueId, selectedEp]);
 
-  const handleGenerate = async () => {
-    if (!selectedEp) return;
-    setLoading(true);
-    setSummary('');
-    setMessage('');
-    try {
-      const result = await api.generateEpisodeSummary(selectedEp);
-      setSummary(result.summary);
-    } catch (err: any) {
-      setMessage(`Error: ${err.message}`);
-      setTimeout(() => setMessage(''), 4000);
-    } finally {
-      setLoading(false);
-    }
+  const copyToClipboard = (text: string, onDone: () => void) => {
+    navigator.clipboard.writeText(text).catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }).finally(onDone);
   };
 
-  const handleCopy = async () => {
+  const handleGenerateEpisode = async () => {
+    if (!selectedLeagueId || !selectedEp) return;
+    setEpLoading(true);
+    setSummary('');
+    setEpMessage('');
     try {
-      await navigator.clipboard.writeText(summary);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Fallback for older browsers
-      const textarea = document.createElement('textarea');
-      textarea.value = summary;
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      const result = await api.generateLeagueEpisodeSummary(selectedLeagueId, selectedEp);
+      setSummary(result.summary);
+    } catch (err: any) {
+      setEpMessage(`Error: ${err.message}`);
+      setTimeout(() => setEpMessage(''), 4000);
+    } finally {
+      setEpLoading(false);
     }
   };
 
   const handleGenerateRecap = async () => {
-    if (!selectedTeamId) return;
-    const team = teams.find(t => t.id === selectedTeamId);
-    if (!team || !team.league_id) return;
+    if (!selectedLeagueId || !selectedTeamId) return;
     setRecapLoading(true);
     setRecap('');
     setRecapMessage('');
     try {
-      const result = await api.generateTeamSeasonRecap(team.league_id, selectedTeamId);
+      const result = await api.generateTeamSeasonRecap(selectedLeagueId, selectedTeamId);
       setRecap(result.recap);
     } catch (err: any) {
       setRecapMessage(`Error: ${err.message}`);
@@ -1819,190 +1849,236 @@ function SummaryTab() {
     }
   };
 
-  const handleRecapCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(recap);
-      setRecapCopied(true);
-      setTimeout(() => setRecapCopied(false), 2000);
-    } catch {
-      const textarea = document.createElement('textarea');
-      textarea.value = recap;
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-      setRecapCopied(true);
-      setTimeout(() => setRecapCopied(false), 2000);
-    }
-  };
+  const leagueSelected = selectedLeagueId > 0;
 
   return (
     <div className="admin-tab-content">
+      {/* Show / Season / League selector */}
       <div className="scoring-form">
-        <h3>📺 Episode Recap Generator</h3>
-        <p className="summary-desc">
-          Select an episode to generate a dramatic, funny recap powered by AI. Copy and send it to your league mates!
-        </p>
-
-        {episodes.length === 0 ? (
-          <div className="summary-empty">
-            <p>No episodes with scoring events yet. Add some scores first!</p>
-          </div>
-        ) : (
-          <>
-            <div className="form-group">
-              <label>Select Episode</label>
-              <select
-                value={selectedEp}
-                onChange={e => setSelectedEp(parseInt(e.target.value))}
-                className="form-select"
-              >
-                <option value={0}>-- Choose an Episode --</option>
-                {episodes.map(ep => (
-                  <option key={ep.episode} value={ep.episode}>
-                    Episode {ep.episode} ({ep.event_count} scoring events)
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {selectedEp > 0 && (
-              <button
-                onClick={handleGenerate}
-                className="btn btn-primary btn-full"
-                disabled={loading}
-              >
-                {loading ? '🔮 Generating Recap...' : '🔥 Generate Episode Recap'}
-              </button>
-            )}
-          </>
-        )}
-
-        {message && (
-          <div className={`form-message ${message.startsWith('Error') ? 'error' : 'success'}`}>
-            {message}
-          </div>
-        )}
-      </div>
-
-      {loading && (
-        <div className="summary-loading">
-          <div className="summary-spinner"></div>
-          <p>Claude is channeling their inner Jeff Probst...</p>
-        </div>
-      )}
-
-      {summary && (
-        <div className="summary-result">
-          <div className="summary-header">
-            <h3>🏝️ Episode {selectedEp} Recap</h3>
-            <button onClick={handleCopy} className="btn btn-copy">
-              {copied ? '✅ Copied!' : '📋 Copy to Clipboard'}
-            </button>
-          </div>
-          <div className="summary-output">
-            {summary}
-          </div>
-        </div>
-      )}
-
-      {selectedEp > 0 && events.length > 0 && (
-        <div className="recent-events" style={{ marginTop: '2rem' }}>
-          <h3>Raw Scoring Data — Episode {selectedEp}</h3>
-          <table className="log-table">
-            <thead>
-              <tr>
-                <th>Player</th>
-                <th>Tribe</th>
-                <th>Event</th>
-                <th>Points</th>
-                <th>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {events.map(event => (
-                <tr key={event.id}>
-                  <td>{event.player_name}</td>
-                  <td>{event.tribe}</td>
-                  <td>{event.event_type.replace(/_/g, ' ')}</td>
-                  <td className={event.points >= 0 ? 'positive' : 'negative'}>
-                    {event.points > 0 ? '+' : ''}{event.points}
-                  </td>
-                  <td>{event.notes || '—'}</td>
-                </tr>
+        <h3>League Context</h3>
+        <div className="form-row">
+          <div className="form-group">
+            <label>Show</label>
+            <select
+              value={selectedShowSlug}
+              onChange={e => setSelectedShowSlug(e.target.value)}
+              className="form-select"
+            >
+              <option value="">-- Select Show --</option>
+              {shows.map(s => (
+                <option key={s.slug} value={s.slug}>{s.name}</option>
               ))}
-            </tbody>
-          </table>
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Season</label>
+            <select
+              value={selectedSeasonId}
+              onChange={e => setSelectedSeasonId(parseInt(e.target.value))}
+              className="form-select"
+              disabled={!selectedShowSlug}
+            >
+              <option value={0}>-- Select Season --</option>
+              {seasons.map(s => (
+                <option key={s.id} value={s.id}>
+                  Season {s.season_number}{s.name ? ` — ${s.name}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>League</label>
+            <select
+              value={selectedLeagueId}
+              onChange={e => setSelectedLeagueId(parseInt(e.target.value))}
+              className="form-select"
+              disabled={!selectedSeasonId}
+            >
+              <option value={0}>-- Select League --</option>
+              {leagues.map(l => (
+                <option key={l.id} value={l.id}>{l.name}</option>
+              ))}
+            </select>
+          </div>
         </div>
-      )}
-
-      {/* Season Recap section */}
-      <div className="scoring-form" style={{ marginTop: '2rem' }}>
-        <h3>🏆 End-of-Season Team Recap</h3>
-        <p className="summary-desc">
-          Select a team to generate a personalized full-season recap powered by AI.
-        </p>
-
-        {teams.length === 0 ? (
-          <div className="summary-empty">
-            <p>No teams found. Create teams first!</p>
-          </div>
-        ) : (
-          <>
-            <div className="form-group">
-              <label>Select Team</label>
-              <select
-                value={selectedTeamId}
-                onChange={e => { setSelectedTeamId(parseInt(e.target.value)); setRecap(''); }}
-                className="form-select"
-              >
-                <option value={0}>-- Choose a Team --</option>
-                {teams.map(t => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} ({t.owner_name})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {selectedTeamId > 0 && (
-              <button
-                onClick={handleGenerateRecap}
-                className="btn btn-primary btn-full"
-                disabled={recapLoading}
-              >
-                {recapLoading ? '🔮 Generating Recap...' : '🏆 Generate Season Recap'}
-              </button>
-            )}
-          </>
-        )}
-
-        {recapMessage && (
-          <div className={`form-message ${recapMessage.startsWith('Error') ? 'error' : 'success'}`}>
-            {recapMessage}
-          </div>
-        )}
       </div>
 
-      {recapLoading && (
-        <div className="summary-loading">
-          <div className="summary-spinner"></div>
-          <p>Claude is reviewing the whole season...</p>
+      {!leagueSelected && (
+        <div className="summary-empty" style={{ marginTop: '1rem' }}>
+          <p>Select a show, season, and league above to generate recaps.</p>
         </div>
       )}
 
-      {recap && (
-        <div className="summary-result">
-          <div className="summary-header">
-            <h3>🏝️ Season Recap — {teams.find(t => t.id === selectedTeamId)?.name}</h3>
-            <button onClick={handleRecapCopy} className="btn btn-copy">
-              {recapCopied ? '✅ Copied!' : '📋 Copy to Clipboard'}
-            </button>
+      {/* Episode Recap */}
+      {leagueSelected && (
+        <>
+          <div className="scoring-form" style={{ marginTop: '1.5rem' }}>
+            <h3>📺 Episode Recap Generator</h3>
+            <p className="summary-desc">
+              Generate a dramatic, funny episode recap to send to your league mates.
+            </p>
+
+            {episodes.length === 0 ? (
+              <div className="summary-empty">
+                <p>No episodes with scoring events yet for this league.</p>
+              </div>
+            ) : (
+              <>
+                <div className="form-group">
+                  <label>Select Episode</label>
+                  <select
+                    value={selectedEp}
+                    onChange={e => setSelectedEp(parseInt(e.target.value))}
+                    className="form-select"
+                  >
+                    <option value={0}>-- Choose an Episode --</option>
+                    {episodes.map(ep => (
+                      <option key={ep.episode} value={ep.episode}>
+                        Episode {ep.episode} ({ep.event_count} scoring events)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {selectedEp > 0 && (
+                  <button
+                    onClick={handleGenerateEpisode}
+                    className="btn btn-primary btn-full"
+                    disabled={epLoading}
+                  >
+                    {epLoading ? '🔮 Generating...' : '🔥 Generate Episode Recap'}
+                  </button>
+                )}
+              </>
+            )}
+
+            {epMessage && (
+              <div className={`form-message ${epMessage.startsWith('Error') ? 'error' : 'success'}`}>
+                {epMessage}
+              </div>
+            )}
           </div>
-          <div className="summary-output">
-            {recap}
+
+          {epLoading && (
+            <div className="summary-loading">
+              <div className="summary-spinner"></div>
+              <p>Claude is channeling their inner Jeff Probst...</p>
+            </div>
+          )}
+
+          {summary && (
+            <div className="summary-result">
+              <div className="summary-header">
+                <h3>🏝️ Episode {selectedEp} Recap</h3>
+                <button
+                  onClick={() => copyToClipboard(summary, () => { setEpCopied(true); setTimeout(() => setEpCopied(false), 2000); })}
+                  className="btn btn-copy"
+                >
+                  {epCopied ? '✅ Copied!' : '📋 Copy'}
+                </button>
+              </div>
+              <div className="summary-output">{summary}</div>
+            </div>
+          )}
+
+          {selectedEp > 0 && events.length > 0 && (
+            <div className="recent-events" style={{ marginTop: '1.5rem' }}>
+              <h3>Raw Scoring Data — Episode {selectedEp}</h3>
+              <table className="log-table">
+                <thead>
+                  <tr>
+                    <th>Player</th>
+                    <th>Tribe</th>
+                    <th>Event</th>
+                    <th>Points</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {events.map(event => (
+                    <tr key={event.id}>
+                      <td>{event.player_name}</td>
+                      <td>{event.tribe}</td>
+                      <td>{event.event_type.replace(/_/g, ' ')}</td>
+                      <td className={event.points >= 0 ? 'positive' : 'negative'}>
+                        {event.points > 0 ? '+' : ''}{event.points}
+                      </td>
+                      <td>{event.notes || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Season Recap */}
+          <div className="scoring-form" style={{ marginTop: '1.5rem' }}>
+            <h3>🏆 End-of-Season Team Recap</h3>
+            <p className="summary-desc">
+              Generate a personalized full-season recap for a specific team.
+            </p>
+
+            {teams.length === 0 ? (
+              <div className="summary-empty">
+                <p>No teams in this league yet.</p>
+              </div>
+            ) : (
+              <>
+                <div className="form-group">
+                  <label>Select Team</label>
+                  <select
+                    value={selectedTeamId}
+                    onChange={e => { setSelectedTeamId(parseInt(e.target.value)); setRecap(''); }}
+                    className="form-select"
+                  >
+                    <option value={0}>-- Choose a Team --</option>
+                    {teams.map(t => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.owner_name})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {selectedTeamId > 0 && (
+                  <button
+                    onClick={handleGenerateRecap}
+                    className="btn btn-primary btn-full"
+                    disabled={recapLoading}
+                  >
+                    {recapLoading ? '🔮 Generating...' : '🏆 Generate Season Recap'}
+                  </button>
+                )}
+              </>
+            )}
+
+            {recapMessage && (
+              <div className={`form-message ${recapMessage.startsWith('Error') ? 'error' : 'success'}`}>
+                {recapMessage}
+              </div>
+            )}
           </div>
-        </div>
+
+          {recapLoading && (
+            <div className="summary-loading">
+              <div className="summary-spinner"></div>
+              <p>Claude is reviewing the whole season...</p>
+            </div>
+          )}
+
+          {recap && (
+            <div className="summary-result">
+              <div className="summary-header">
+                <h3>🏝️ Season Recap — {teams.find(t => t.id === selectedTeamId)?.name}</h3>
+                <button
+                  onClick={() => copyToClipboard(recap, () => { setRecapCopied(true); setTimeout(() => setRecapCopied(false), 2000); })}
+                  className="btn btn-copy"
+                >
+                  {recapCopied ? '✅ Copied!' : '📋 Copy'}
+                </button>
+              </div>
+              <div className="summary-output">{recap}</div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
