@@ -783,6 +783,7 @@ a:hover { color: var(--gold-bright); }
 /* ============================================================
    SCOREBOARD PAGE
    ============================================================ */
+/* ── Legacy tab-bar (non-admin pages) ── */
 .tab-bar {
   display: flex;
   gap: 0.25rem;
@@ -808,6 +809,58 @@ a:hover { color: var(--gold-bright); }
 .tab.active {
   color: var(--gold);
   border-bottom-color: var(--gold);
+}
+
+/* ── Admin Command Rail ── */
+.admin-command-rail {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 2rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0.35rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.admin-command-rail::-webkit-scrollbar { display: none; }
+.cmd-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.55rem 0.9rem;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  border-radius: calc(var(--radius-lg) - 0.35rem);
+  white-space: nowrap;
+  flex-shrink: 0;
+  position: relative;
+}
+.cmd-btn:hover {
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.03);
+}
+.cmd-btn.active {
+  background: rgba(212, 168, 67, 0.1);
+  color: var(--gold);
+  box-shadow: inset 0 0 0 1px rgba(212, 168, 67, 0.2);
+}
+.cmd-btn.active .cmd-icon { filter: drop-shadow(0 0 4px rgba(255,107,53,0.6)); }
+.cmd-icon {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+.cmd-label {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  line-height: 1;
 }
 
 /* Team cards in standings */
@@ -885,23 +938,31 @@ a:hover { color: var(--gold-bright); }
 .rules-table, .log-table {
   width: 100%;
   border-collapse: collapse;
+  font-size: 0.9rem;
 }
 .rules-table th, .rules-table td,
 .log-table th, .log-table td {
-  padding: 0.75rem 1rem;
+  padding: 0.65rem 1rem;
   text-align: left;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid rgba(58,53,32,0.5);
 }
 .rules-table th, .log-table th {
   font-family: var(--font-display);
-  font-size: 0.95rem;
+  font-size: 0.72rem;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 1.5px;
+  background: rgba(0,0,0,0.15);
 }
-.rules-table tr:hover, .log-table tr:hover {
-  background: rgba(212, 168, 67, 0.03);
+.rules-table td, .log-table td {
+  color: var(--text-secondary);
+  vertical-align: middle;
+}
+.rules-table tr:last-child td, .log-table tr:last-child td { border-bottom: none; }
+.rules-table tr:hover td, .log-table tr:hover td {
+  background: rgba(212, 168, 67, 0.04);
+  color: var(--text-primary);
 }
 .negative-row { background: rgba(232, 52, 78, 0.05); }
 .points-cell { font-family: var(--font-display); font-weight: 600; font-size: 1.1rem; }
@@ -1015,7 +1076,12 @@ a:hover { color: var(--gold-bright); }
   border: 1px solid rgba(232, 52, 78, 0.3);
   color: var(--negative);
 }
-.form-row { margin-bottom: 1rem; }
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
 .form-row-inline {
   display: flex;
   gap: 1rem;
@@ -1053,24 +1119,103 @@ a:hover { color: var(--gold-bright); }
 }
 
 /* ============================================================
-   ADMIN PAGE
+   ADMIN PAGE — TRIBAL WAR ROOM
    ============================================================ */
-.admin-tab-content {
-  max-width: 800px;
+
+/* Admin header */
+.admin-header {
+  position: relative;
+  text-align: center;
+  padding: 1.5rem 0 1rem;
+  margin-bottom: 1.5rem;
 }
+.admin-header::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 50%; transform: translateX(-50%);
+  width: 60%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--fire-orange), var(--gold), var(--fire-orange), transparent);
+}
+.admin-title {
+  font-family: var(--font-display);
+  font-size: 3.5rem;
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: 8px;
+  text-transform: uppercase;
+  text-shadow: 0 0 40px rgba(212,168,67,0.4), 0 0 80px rgba(255,107,53,0.15);
+  line-height: 1;
+  margin-bottom: 0.2rem;
+}
+.admin-subtitle {
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  letter-spacing: 5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.admin-header-rule {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.admin-header-rule::before,
+.admin-header-rule::after {
+  content: '';
+  width: 80px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-light));
+}
+.admin-header-rule::after {
+  background: linear-gradient(270deg, transparent, var(--border-light));
+}
+.admin-header-rule span { color: var(--fire-orange); font-size: 0.85rem; }
+
+.admin-tab-content {
+  max-width: 960px;
+}
+
+/* Cards */
 .scoring-form, .team-form, .draft-form {
   background: var(--bg-card);
   border: 1px solid var(--border);
+  border-left: 3px solid var(--fire-orange);
   border-radius: var(--radius-lg);
-  padding: 1.5rem;
-  margin-bottom: 2rem;
+  padding: 1.5rem 1.75rem;
+  margin-bottom: 1.5rem;
+  position: relative;
+  overflow: hidden;
+}
+.scoring-form::after, .team-form::after, .draft-form::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0;
+  width: 200px; height: 100%;
+  background: radial-gradient(ellipse at top right, rgba(255,107,53,0.04) 0%, transparent 60%);
+  pointer-events: none;
 }
 .scoring-form h3, .team-form h3, .draft-form h3 {
   font-family: var(--font-display);
-  font-size: 1.3rem;
-  color: var(--gold);
-  letter-spacing: 1px;
-  margin-bottom: 1rem;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.scoring-form h3::before, .team-form h3::before, .draft-form h3::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 1.1em;
+  background: linear-gradient(180deg, var(--gold), var(--fire-orange));
+  border-radius: 2px;
+  flex-shrink: 0;
 }
 .bulk-player-grid {
   display: grid;
@@ -1145,12 +1290,23 @@ a:hover { color: var(--gold-bright); }
   font-weight: normal;
   margin-left: 0.4rem;
 }
+.recent-events {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
 .recent-events h3 {
   font-family: var(--font-display);
-  font-size: 1.3rem;
-  color: var(--gold);
-  letter-spacing: 1px;
-  margin-bottom: 1rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(0,0,0,0.2);
+  margin: 0;
 }
 
 /* Admin team cards */
@@ -1165,11 +1321,17 @@ a:hover { color: var(--gold-bright); }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem;
+  padding: 0.875rem 1.25rem;
   background: var(--bg-card);
   border: 1px solid var(--border);
+  border-left: 3px solid var(--border-light);
   border-radius: var(--radius);
   margin-bottom: 0.5rem;
+  transition: border-left-color 0.2s, box-shadow 0.2s;
+}
+.admin-team-card:hover {
+  border-left-color: var(--gold);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
 }
 .admin-team-info {
   display: flex;
@@ -1828,6 +1990,7 @@ a:hover { color: var(--gold-bright); }
   margin-top: 1.5rem;
   background: var(--bg-card);
   border: 1px solid var(--border);
+  border-left: 3px solid var(--gold);
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
@@ -1835,7 +1998,7 @@ a:hover { color: var(--gold-bright); }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.25rem;
+  padding: 0.75rem 1.25rem;
   border-bottom: 1px solid var(--border);
   background: rgba(212, 168, 67, 0.05);
 }
@@ -1843,7 +2006,9 @@ a:hover { color: var(--gold-bright); }
   margin: 0;
   font-family: var(--font-display);
   color: var(--gold);
-  font-size: 1.3rem;
+  font-size: 1.1rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
 }
 .btn-copy {
   background: transparent;
@@ -2618,6 +2783,11 @@ a:hover { color: var(--gold-bright); }
   .gs-advantage-grid { grid-template-columns: 1fr; }
   .gs-alliance-grid { grid-template-columns: 1fr; }
   .tab { font-size: 0.9rem; padding: 0.5rem 0.75rem; }
+  .cmd-btn { padding: 0.45rem 0.6rem; }
+  .cmd-label { font-size: 0.6rem; }
+  .admin-title { font-size: 2.2rem; letter-spacing: 4px; }
+  .admin-tab-content { max-width: 100%; }
+  .scoring-form, .team-form, .draft-form { padding: 1.25rem; }
   .draft-pick-bar { flex-direction: column; }
   .draft-board { grid-template-columns: 1fr; }
 }

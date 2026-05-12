@@ -22,36 +22,48 @@ export default function AdminPage() {
 
   return (
     <div className="admin-page">
-      <h1 className="page-title">TRIBAL COUNCIL</h1>
-      <p className="page-subtitle">League Administration</p>
+      <div className="admin-header">
+        <h1 className="admin-title">TRIBAL COUNCIL</h1>
+        <p className="admin-subtitle">League Administration</p>
+        <div className="admin-header-rule"><span>🔥</span></div>
+      </div>
 
-      <div className="tab-bar">
-        <button className={`tab ${tab === 'scoring' ? 'active' : ''}`} onClick={() => setTab('scoring')}>
-          Add Scores
+      <div className="admin-command-rail">
+        <button className={`cmd-btn ${tab === 'scoring' ? 'active' : ''}`} onClick={() => setTab('scoring')}>
+          <span className="cmd-icon">⚡</span>
+          <span className="cmd-label">Scores</span>
         </button>
-        <button className={`tab ${tab === 'challenges' ? 'active' : ''}`} onClick={() => setTab('challenges')}>
-          Challenges
+        <button className={`cmd-btn ${tab === 'challenges' ? 'active' : ''}`} onClick={() => setTab('challenges')}>
+          <span className="cmd-icon">🏆</span>
+          <span className="cmd-label">Challenges</span>
         </button>
-        <button className={`tab ${tab === 'eliminate' ? 'active' : ''}`} onClick={() => setTab('eliminate')}>
-          Eliminate
+        <button className={`cmd-btn ${tab === 'eliminate' ? 'active' : ''}`} onClick={() => setTab('eliminate')}>
+          <span className="cmd-icon">🗳️</span>
+          <span className="cmd-label">Eliminate</span>
         </button>
-        <button className={`tab ${tab === 'teams' ? 'active' : ''}`} onClick={() => setTab('teams')}>
-          Manage Teams
+        <button className={`cmd-btn ${tab === 'teams' ? 'active' : ''}`} onClick={() => setTab('teams')}>
+          <span className="cmd-icon">👥</span>
+          <span className="cmd-label">Teams</span>
         </button>
-        <button className={`tab ${tab === 'draft' ? 'active' : ''}`} onClick={() => setTab('draft')}>
-          Draft
+        <button className={`cmd-btn ${tab === 'draft' ? 'active' : ''}`} onClick={() => setTab('draft')}>
+          <span className="cmd-icon">🎯</span>
+          <span className="cmd-label">Draft</span>
         </button>
-        <button className={`tab ${tab === 'tribes' ? 'active' : ''}`} onClick={() => setTab('tribes')}>
-          Tribes
+        <button className={`cmd-btn ${tab === 'tribes' ? 'active' : ''}`} onClick={() => setTab('tribes')}>
+          <span className="cmd-icon">🌿</span>
+          <span className="cmd-label">Tribes</span>
         </button>
-        <button className={`tab ${tab === 'gamestate' ? 'active' : ''}`} onClick={() => setTab('gamestate')}>
-          Game State
+        <button className={`cmd-btn ${tab === 'gamestate' ? 'active' : ''}`} onClick={() => setTab('gamestate')}>
+          <span className="cmd-icon">🗺️</span>
+          <span className="cmd-label">Game State</span>
         </button>
-        <button className={`tab ${tab === 'summary' ? 'active' : ''}`} onClick={() => setTab('summary')}>
-          Recap
+        <button className={`cmd-btn ${tab === 'summary' ? 'active' : ''}`} onClick={() => setTab('summary')}>
+          <span className="cmd-icon">📜</span>
+          <span className="cmd-label">Recap</span>
         </button>
-        <button className={`tab ${tab === 'manage' ? 'active' : ''}`} onClick={() => setTab('manage')}>
-          Shows/Seasons
+        <button className={`cmd-btn ${tab === 'manage' ? 'active' : ''}`} onClick={() => setTab('manage')}>
+          <span className="cmd-icon">⚙️</span>
+          <span className="cmd-label">Shows</span>
         </button>
       </div>
 
