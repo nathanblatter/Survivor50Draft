@@ -15,6 +15,7 @@ import apiRouter from './routes/api';
 import showsRouter from './routes/shows';
 import seasonsRouter from './routes/seasons';
 import leaguesRouter from './routes/leagues';
+import kpiRouter from './routes/kpi';
 
 dotenv.config();
 
@@ -25,6 +26,7 @@ app.use(cors());
 app.use(express.json());
 
 // API routes
+app.use('/api/kpi', kpiRouter);
 app.use('/api', apiRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/shows', showsRouter);

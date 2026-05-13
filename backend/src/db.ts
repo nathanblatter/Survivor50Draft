@@ -171,6 +171,19 @@ export async function initDB() {
       );
     `);
 
+    // KPI migrations
+    await client.query(`
+      ALTER TABLE seasons ADD COLUMN IF NOT EXISTS current_episode_aired_at TIMESTAMPTZ
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_sessions (
+        id SERIAL PRIMARY KEY,
+        user_id INT,
+        logged_in_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
     // Migrate existing tribe_history: replace tribe_name with tribe_id
     await client.query(`
       DO $$
