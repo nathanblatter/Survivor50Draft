@@ -598,6 +598,7 @@ function ScoringTab() {
           <p>Select a show and season above to load players.</p>
         </div>
       ) : (
+        <>
       <form onSubmit={handleSubmit} className="scoring-form">
         <div className="form-row">
           <label className="form-toggle">
@@ -892,6 +893,7 @@ function ScoringTab() {
           </div>
         )}
       </div>
+        </>
       )} {/* end selectedSeasonId */}
     </div>
   );
