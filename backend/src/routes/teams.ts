@@ -86,9 +86,10 @@ router.get('/', async (_req: Request, res: Response) => {
 });
 
 // ── GET /api/teams/:id ──
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', async (req: Request, res: Response, next: any) => {
+  const { id } = req.params;
+  if (isNaN(Number(id))) return next();
   try {
-    const { id } = req.params;
     const teamResult = await pool.query('SELECT * FROM teams WHERE id = $1', [id]);
     if (teamResult.rows.length === 0) {
       res.status(404).json({ error: 'Team not found' });

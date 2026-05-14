@@ -135,9 +135,10 @@ router.get('/', async (_req: Request, res: Response) => {
 });
 
 // ── GET /api/players/:id — global (player ID is unique) ──
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', async (req: Request, res: Response, next: any) => {
+  const { id } = req.params;
+  if (isNaN(Number(id))) return next();
   try {
-    const { id } = req.params;
     const playerResult = await pool.query(`
       SELECT p.*, tp.team_id,
         COALESCE(
