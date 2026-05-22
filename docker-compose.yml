@@ -2,14 +2,18 @@ services:
   app:
     build: .
     restart: unless-stopped
-    ports:
-      - "3001:3001"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     env_file: .env
     environment:
       DATABASE_URL: postgresql://postgres:postgres@host.docker.internal:5432/survivor50
       PORT: 3001
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 10s
+      retries: 6
+      start_period: 30s
 
   tunnel:
     image: cloudflare/cloudflared:latest
