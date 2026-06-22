@@ -12,6 +12,7 @@ import LoginPage from './pages/LoginPage';
 import DraftPage from './pages/DraftPage';
 import AdminPage from './pages/AdminPage';
 import GameStatePage from './pages/GameStatePage';
+import BugReport from './components/BugReport';
 
 export default function App() {
   return (
@@ -56,6 +57,7 @@ export default function App() {
           </p>
         </div>
       </footer>
+      <BugReport />
     </div>
   );
 }
