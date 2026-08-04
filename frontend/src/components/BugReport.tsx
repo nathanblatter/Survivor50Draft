@@ -9,6 +9,12 @@ const SEVERITIES = [
 
 type Status = 'idle' | 'sending' | 'sent' | 'error';
 
+const MAX_SHOTS = 4;
+const MAX_SHOT_BYTES = 8 * 1024 * 1024;
+const SHOT_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+
+type Shot = { file: File; url: string };
+
 // Scoped styles, built from the app's war-room CSS custom properties so the
 // widget reads as native (Teko display, ember-orange, fire-lit dark cards).
 const CSS = `
@@ -42,6 +48,16 @@ const CSS = `
 .s50-send:hover{background:var(--gold-bright,#F0C75E)}.s50-send:disabled{opacity:.55;cursor:default}
 .s50-sent{margin-top:18px;border:1px solid var(--border);border-radius:6px;background:rgba(76,175,80,.08);
   padding:18px;text-align:center;font-size:14px;color:var(--text-primary)}
+.s50-drop{margin-top:2px;border:1.5px dashed var(--border,#3a3520);border-radius:6px;padding:12px;cursor:pointer;
+  text-align:center;font-size:12.5px;color:var(--text-muted,#7a6e56);transition:border-color .15s ease,background .15s ease}
+.s50-drop:hover,.s50-drop.over{border-color:var(--fire-orange,#FF6B35);background:rgba(255,107,53,.06);color:var(--text-secondary,#a89878)}
+.s50-drop:focus-visible{outline:2px solid var(--gold-bright,#F0C75E);outline-offset:2px}
+.s50-thumbs{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.s50-thumb{position:relative;width:64px;height:64px;border:1px solid var(--border,#3a3520);border-radius:6px;overflow:hidden}
+.s50-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.s50-thumb button{position:absolute;top:2px;right:2px;width:18px;height:18px;border:0;border-radius:50%;cursor:pointer;
+  background:rgba(5,5,3,.75);color:var(--text-primary,#f0e6d3);font-size:12px;line-height:18px;padding:0;text-align:center}
+.s50-thumb button:hover{background:var(--fire-red,#E8344E)}
 `;
 
 export default function BugReport() {
@@ -50,25 +66,75 @@ export default function BugReport() {
   const [severity, setSeverity] = useState('med');
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState('');
+  const [sentNote, setSentNote] = useState('');
+  const [shots, setShots] = useState<Shot[]>([]);
+  const [dragOver, setDragOver] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const shotsRef = useRef<Shot[]>([]);
+  shotsRef.current = shots;
 
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
+    const onPaste = (e: ClipboardEvent) => {
+      const files = Array.from(e.clipboardData?.files || []).filter((f) => SHOT_TYPES.includes(f.type));
+      if (files.length) { e.preventDefault(); addFiles(files); }
+    };
     document.addEventListener('keydown', onKey);
+    document.addEventListener('paste', onPaste);
     const id = window.setTimeout(() => ref.current?.focus(), 40);
-    return () => { document.removeEventListener('keydown', onKey); window.clearTimeout(id); };
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('paste', onPaste);
+      window.clearTimeout(id);
+    };
   }, [open]);
+
+  useEffect(() => () => { shotsRef.current.forEach((s) => URL.revokeObjectURL(s.url)); }, []);
+
+  function clearShots() {
+    shotsRef.current.forEach((s) => URL.revokeObjectURL(s.url));
+    setShots([]);
+  }
 
   function close() {
     setOpen(false);
-    window.setTimeout(() => { setMessage(''); setSeverity('med'); setStatus('idle'); setError(''); }, 200);
+    window.setTimeout(() => {
+      setMessage(''); setSeverity('med'); setStatus('idle'); setError(''); setSentNote('');
+      clearShots();
+    }, 200);
+  }
+
+  function addFiles(list: File[] | FileList) {
+    const incoming = Array.from(list);
+    if (!incoming.length) return;
+    const current = shotsRef.current;
+    const errors: string[] = [];
+    const accepted: Shot[] = [];
+    for (const file of incoming) {
+      if (!SHOT_TYPES.includes(file.type)) { errors.push(`${file.name || 'That file'} isn't an image (PNG, JPEG, WebP, or GIF).`); continue; }
+      if (file.size > MAX_SHOT_BYTES) { errors.push(`${file.name || 'That image'} is over 8MB.`); continue; }
+      if (current.length + accepted.length >= MAX_SHOTS) { errors.push(`Up to ${MAX_SHOTS} screenshots per report.`); break; }
+      accepted.push({ file, url: URL.createObjectURL(file) });
+    }
+    if (accepted.length) setShots([...current, ...accepted]);
+    setError(errors[0] || '');
+  }
+
+  function removeShot(idx: number) {
+    const next = shotsRef.current.slice();
+    const [gone] = next.splice(idx, 1);
+    if (gone) URL.revokeObjectURL(gone.url);
+    setShots(next);
+    setError('');
   }
 
   async function send() {
     const trimmed = message.trim();
     if (!trimmed) { setError('Add a quick description first.'); ref.current?.focus(); return; }
     setStatus('sending'); setError('');
+    let created: { id?: string } | null = null;
     try {
       const res = await fetch('/api/bug-report', {
         method: 'POST',
@@ -81,11 +147,30 @@ export default function BugReport() {
         }),
       });
       if (!res.ok) throw new Error();
-      setStatus('sent');
-      window.setTimeout(close, 1300);
+      created = await res.json().catch(() => null);
     } catch {
       setStatus('error'); setError('Could not send. Try again.');
+      return;
     }
+
+    // Report is filed; screenshots are best-effort from here.
+    let note = '';
+    const toUpload = shotsRef.current;
+    if (toUpload.length && created?.id) {
+      try {
+        const form = new FormData();
+        toUpload.forEach((s) => form.append('files', s.file, s.file.name || 'screenshot.png'));
+        const up = await fetch(`/api/bug-report/${created.id}/screenshots`, { method: 'POST', body: form });
+        if (!up.ok) note = "Screenshots couldn't be attached, but the report went through.";
+      } catch {
+        note = "Screenshots couldn't be attached, but the report went through.";
+      }
+    } else if (toUpload.length && !created?.id) {
+      note = "Screenshots couldn't be attached, but the report went through.";
+    }
+    setSentNote(note);
+    setStatus('sent');
+    window.setTimeout(close, note ? 2600 : 1300);
   }
 
   return (
@@ -102,7 +187,7 @@ export default function BugReport() {
             <p className="sub">Tell us what happened — it goes straight to the board.</p>
 
             {status === 'sent' ? (
-              <div className="s50-sent">Report filed. Thanks for the intel.</div>
+              <div className="s50-sent">Report filed. Thanks for the intel.{sentNote ? <><br />{sentNote}</> : null}</div>
             ) : (
               <>
                 <label htmlFor="s50-msg">What went wrong?</label>
@@ -113,6 +198,38 @@ export default function BugReport() {
                 <select id="s50-sev" value={severity} onChange={(e) => setSeverity(e.target.value)}>
                   {SEVERITIES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
+
+                <label>Screenshots (optional)</label>
+                <div
+                  className={`s50-drop${dragOver ? ' over' : ''}`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => fileRef.current?.click()}
+                  onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), fileRef.current?.click())}
+                  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={(e) => { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files); }}
+                >
+                  Drop images here, click to browse, or paste from clipboard — up to {MAX_SHOTS}, 8MB each
+                </div>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept={SHOT_TYPES.join(',')}
+                  multiple
+                  hidden
+                  onChange={(e) => { addFiles(e.target.files || []); e.target.value = ''; }}
+                />
+                {shots.length > 0 && (
+                  <div className="s50-thumbs">
+                    {shots.map((s, i) => (
+                      <div className="s50-thumb" key={s.url}>
+                        <img src={s.url} alt={s.file.name || `Screenshot ${i + 1}`} />
+                        <button type="button" aria-label={`Remove ${s.file.name || `screenshot ${i + 1}`}`} onClick={() => removeShot(i)}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 <div className="s50-row">
                   <span className={`s50-msg${error ? ' err' : ''}`}>{error}</span>
