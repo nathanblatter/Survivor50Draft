@@ -3244,9 +3244,11 @@ a:hover { color: var(--gold-bright); }
 .admin-header.compact .admin-title { font-size: 2rem; letter-spacing: 4px; text-shadow: none; }
 .admin-header.compact .admin-subtitle { font-size: 0.75rem; letter-spacing: 3px; }
 .admin-command-rail { gap: 0.35rem; }
-.cmd-btn { padding: 0.55rem 0.9rem; min-width: 96px; }
-.cmd-icon { font-size: 1.1rem; }
-.cmd-label { font-size: 0.72rem; letter-spacing: 1px; }
+.cmd-btn { padding: 0.6rem 1rem; min-width: 104px; flex-direction: row; gap: 0.5rem; }
+.cmd-icon { font-size: 1rem; }
+.cmd-label { font-size: 0.95rem; letter-spacing: 1.5px; color: inherit; }
+.cmd-btn.active { color: var(--gold); background: rgba(212,168,67,0.16); box-shadow: inset 0 0 0 1px rgba(212,168,67,0.45); }
+body.has-sticky-bar .s50-launch { bottom: calc(5.25rem + env(safe-area-inset-bottom, 0px)) !important; }
 .tab-intro { color: var(--text-secondary); max-width: 70ch; margin: 0 0 1.25rem; font-size: 0.95rem; line-height: 1.5; }
 .tab-intro strong { color: var(--text-primary); }
 .danger-zone { margin: 0 0 1.5rem; border: 1px dashed rgba(232,52,78,0.4); border-radius: var(--radius-lg); padding: 0.75rem 1rem; }
@@ -3311,8 +3313,8 @@ a:hover { color: var(--gold-bright); }
 .ep-sticky-actions { display: flex; gap: 0.5rem; align-items: center; }
 
 @media (max-width: 768px) {
-  .cmd-btn { min-width: 0; padding: 0.5rem 0.65rem; }
-  .cmd-label { font-size: 0.65rem; }
+  .cmd-btn { min-width: 0; padding: 0.5rem 0.7rem; }
+  .cmd-label { font-size: 0.8rem; letter-spacing: 1px; }
   .dash-grid { grid-template-columns: 1fr; }
   .dash-grid .dash-card:first-child { grid-row: auto; }
   .form-row-inline > .form-group, .form-row-inline > .form-group.flex-1 { width: 100%; }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api, eventLabel, formatPoints } from '../../api';
 import { Player, Extraction, EventInput } from '../../types';
 import { useAdmin } from './AdminContext';
@@ -42,6 +42,12 @@ export default function EpisodeTab() {
   const [extraction, setExtraction] = useState<Extraction | null>(null);
   const [accepted, setAccepted] = useState<Set<number>>(new Set());
   const [fixes, setFixes] = useState<Record<number, number>>({});
+
+  // Lift the floating bug-report button above the sticky submit bar while this tab is open.
+  useEffect(() => {
+    document.body.classList.add('has-sticky-bar');
+    return () => document.body.classList.remove('has-sticky-bar');
+  }, []);
 
   const ruleOf = (t: string) => rules.find(r => r.event_type === t);
   const has = (t: string) => Boolean(ruleOf(t));
