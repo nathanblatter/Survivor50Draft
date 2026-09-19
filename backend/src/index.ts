@@ -12,11 +12,12 @@ import scoringRouter from './routes/scoring';
 import summaryRouter from './routes/summary';
 import tribesRouter from './routes/tribes';
 import gamestateRouter from './routes/gamestate';
-import apiRouter from './routes/api';
 import showsRouter from './routes/shows';
 import seasonsRouter from './routes/seasons';
 import leaguesRouter from './routes/leagues';
 import kpiRouter from './routes/kpi';
+import homeRouter from './routes/home';
+import extractRouter from './routes/extract';
 
 dotenv.config();
 
@@ -24,7 +25,7 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 
 // Bug report → flightdeck
 app.post('/api/bug-report', async (req, res) => {
@@ -110,34 +111,29 @@ app.post('/api/bug-report/:id/screenshots', (req, res) => {
   });
 });
 
-// API routes
+// API routes — every data route is scoped by show / season / league.
 app.use('/api/kpi', kpiRouter);
-app.use('/api', apiRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/shows', showsRouter);
-app.use('/api', seasonsRouter);
-app.use('/api', leaguesRouter);
-app.use('/api', playersRouter);   // scoped: /api/seasons/:seasonId/players, legacy: /api/players/*
-app.use('/api/players', playersRouter);  // legacy mount for /api/players/:id
-app.use('/api', teamsRouter);    // scoped: /api/leagues/:leagueId/teams
-app.use('/api/teams', teamsRouter);      // legacy mount
-app.use('/api', draftRouter);    // scoped: /api/leagues/:leagueId/draft/*
-app.use('/api/draft', draftRouter);      // legacy mount
-app.use('/api', scoringRouter);  // scoped: /api/shows/:showSlug/rules, /api/seasons/:seasonId/scoring/*
-app.use('/api/scoring', scoringRouter);  // legacy mount
-app.use('/api', summaryRouter);  // scoped: /api/leagues/:leagueId/summary/*
-app.use('/api/summary', summaryRouter);  // legacy mount
-app.use('/api', tribesRouter);   // scoped: /api/seasons/:seasonId/tribes
-app.use('/api/tribes', tribesRouter);    // legacy mount
-app.use('/api', gamestateRouter); // scoped: /api/seasons/:seasonId/gamestate/*
-app.use('/api/gamestate', gamestateRouter); // legacy mount
+app.use('/api', homeRouter);      // /featured, /hall-of-fame, /leagues/:id/recap
+app.use('/api', seasonsRouter);   // /shows/:slug/seasons, /seasons/:id
+app.use('/api', leaguesRouter);   // /seasons/:id/leagues, /leagues/:id, /leagues/join/:code
+app.use('/api', playersRouter);   // /seasons/:id/players, /players/:id
+app.use('/api', teamsRouter);     // /leagues/:id/teams, /teams/:id
+app.use('/api', draftRouter);     // /leagues/:id/draft/*
+app.use('/api', scoringRouter);   // /shows/:slug/rules, /rules/:id, /seasons/:id/scoring/events
+app.use('/api', extractRouter);   // /seasons/:id/scoring/extract (AI-proposed events, admin reviews)
+app.use('/api', summaryRouter);   // /leagues/:id/summary/*, /leagues/:id/recaps
+app.use('/api', tribesRouter);    // /seasons/:id/tribes, /tribes/:id
+app.use('/api', gamestateRouter); // /seasons/:id/gamestate/*
 
-// Health check at root level (before static catch-all)
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
+app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 
 // Serve static frontend in production
 const frontendPath = path.join(__dirname, '../../frontend/dist');
-app.use(express.static(frontendPath));
+app.use(express.static(frontendPath, { maxAge: '1h', index: false }));
 app.get('*', (_req, res) => {
   res.sendFile(path.join(frontendPath, 'index.html'));
 });
@@ -150,4 +146,7 @@ async function start() {
   });
 }
 
-start().catch(console.error);
+start().catch((err) => {
+  console.error('Fatal startup error:', err);
+  process.exit(1);
+});

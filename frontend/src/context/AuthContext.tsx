@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { api } from '../api';
+import { api, TOKEN_KEY } from '../api';
 
 interface AuthContextType {
   isAdmin: boolean;
@@ -20,12 +20,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('fantasydraft_token');
+    const token = localStorage.getItem(TOKEN_KEY);
     if (token) {
       api.verifyToken()
         .then(() => setIsAdmin(true))
         .catch(() => {
-          localStorage.removeItem('fantasydraft_token');
+          localStorage.removeItem(TOKEN_KEY);
           setIsAdmin(false);
         })
         .finally(() => setLoading(false));
@@ -36,12 +36,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (password: string) => {
     const { token } = await api.login(password);
-    localStorage.setItem('fantasydraft_token', token);
+    localStorage.setItem(TOKEN_KEY, token);
     setIsAdmin(true);
   };
 
   const logout = () => {
-    localStorage.removeItem('fantasydraft_token');
+    localStorage.removeItem(TOKEN_KEY);
     setIsAdmin(false);
   };
 

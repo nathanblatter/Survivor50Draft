@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -9,10 +9,9 @@ export default function LoginPage() {
   const { login, isAdmin } = useAuth();
   const navigate = useNavigate();
 
-  if (isAdmin) {
-    navigate('/admin');
-    return null;
-  }
+  useEffect(() => {
+    if (isAdmin) navigate('/admin', { replace: true });
+  }, [isAdmin, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,7 +32,7 @@ export default function LoginPage() {
       <div className="login-card">
         <div className="login-torch">🔥</div>
         <h1 className="login-title">TRIBAL COUNCIL</h1>
-        <p className="login-subtitle">Admin Access Only</p>
+        <p className="login-subtitle">Commissioner access only</p>
 
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
@@ -43,11 +42,12 @@ export default function LoginPage() {
               onChange={e => setPassword(e.target.value)}
               placeholder="Enter the password..."
               className="form-input"
+              autoComplete="current-password"
               autoFocus
             />
           </div>
           {error && <div className="form-error">{error}</div>}
-          <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
+          <button type="submit" className="btn btn-primary btn-full" disabled={loading || !password}>
             {loading ? 'Verifying...' : 'Enter Tribal Council'}
           </button>
         </form>

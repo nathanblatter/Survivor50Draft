@@ -1,20 +1,22 @@
-import { Show, Season, League } from './types';
+import {
+  Show, Season, League, Player, Team, TeamDetail, ScoringRule, ScoringEvent, EventInput, DraftState,
+  Tribe, Idol, Advantage, Alliance, Featured, HallOfFameEntry, SeasonRecap, Extraction,
+} from './types';
 
 const API_BASE = '/api';
+export const TOKEN_KEY = 'fantasydraft_token';
 
-function getHeaders(): HeadersInit {
-  const headers: HeadersInit = { 'Content-Type': 'application/json' };
-  const token = localStorage.getItem('fantasydraft_token');
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
+function getHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (token) headers['Authorization'] = `Bearer ${token}`;
   return headers;
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
-    headers: { ...getHeaders(), ...options?.headers },
+    headers: { ...getHeaders(), ...(options?.headers as Record<string, string> | undefined) },
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Request failed' }));
@@ -23,155 +25,145 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
+const post = <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) });
+const patch = <T>(path: string, body: unknown) => request<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
+const del = <T = { success: true }>(path: string) => request<T>(path, { method: 'DELETE' });
+
 export const api = {
   // Auth
-  login: (password: string) => request<{ token: string }>('/auth/login', {
-    method: 'POST', body: JSON.stringify({ password }),
-  }),
+  login: (password: string) => post<{ token: string }>('/auth/login', { password }),
   verifyToken: () => request<{ valid: boolean }>('/auth/verify'),
 
-  // ── Shows ──
+  // Landing / archive
+  getFeatured: () => request<Featured | null>('/featured'),
+  getHallOfFame: () => request<HallOfFameEntry[]>('/hall-of-fame'),
+  getSeasonRecap: (leagueId: number) => request<SeasonRecap>(`/leagues/${leagueId}/recap`),
+
+  // Shows
   getShows: () => request<Show[]>('/shows'),
   getShow: (slug: string) => request<Show>(`/shows/${slug}`),
-  createShow: (data: { name: string; slug: string; description?: string }) =>
-    request<Show>('/shows', { method: 'POST', body: JSON.stringify(data) }),
-  updateShow: (slug: string, data: { name?: string; description?: string }) =>
-    request<Show>(`/shows/${slug}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  deleteShow: (slug: string) => request<any>(`/shows/${slug}`, { method: 'DELETE' }),
+  createShow: (data: { name: string; slug: string; description?: string }) => post<Show>('/shows', data),
+  updateShow: (slug: string, data: { name?: string; description?: string }) => patch<Show>(`/shows/${slug}`, data),
+  deleteShow: (slug: string) => del(`/shows/${slug}`),
 
-  // ── Seasons ──
+  // Seasons
   getSeasons: (showSlug: string) => request<Season[]>(`/shows/${showSlug}/seasons`),
   getSeason: (seasonId: number) => request<Season>(`/seasons/${seasonId}`),
-  getSeasonBySlug: (showSlug: string, seasonNum: number) =>
-    request<Season>(`/shows/${showSlug}/seasons/${seasonNum}`),
-  createSeason: (showSlug: string, data: { season_number: number; name?: string; cast_count?: number }) =>
-    request<Season>(`/shows/${showSlug}/seasons`, { method: 'POST', body: JSON.stringify(data) }),
-  updateSeason: (seasonId: number, data: { name?: string; cast_count?: number; is_active?: boolean }) =>
-    request<Season>(`/seasons/${seasonId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  getSeasonBySlug: (showSlug: string, seasonNum: number) => request<Season>(`/shows/${showSlug}/seasons/${seasonNum}`),
+  createSeason: (showSlug: string, data: { season_number: number; name?: string; cast_count?: number; premiere_date?: string }) =>
+    post<Season>(`/shows/${showSlug}/seasons`, data),
+  updateSeason: (seasonId: number, data: Partial<Pick<Season, 'name' | 'cast_count' | 'is_active' | 'is_complete' | 'current_episode' | 'premiere_date'>>) =>
+    patch<Season>(`/seasons/${seasonId}`, data),
+  deleteSeason: (seasonId: number) => del(`/seasons/${seasonId}`),
 
-  // ── Leagues ──
+  // Leagues
   getLeagues: (seasonId: number) => request<League[]>(`/seasons/${seasonId}/leagues`),
   getLeague: (leagueId: number) => request<League>(`/leagues/${leagueId}`),
   getLeagueByInviteCode: (inviteCode: string) => request<League>(`/leagues/join/${inviteCode}`),
-  createLeague: (seasonId: number, data: { name: string; invite_code?: string }) =>
-    request<League>(`/seasons/${seasonId}/leagues`, { method: 'POST', body: JSON.stringify(data) }),
-  updateLeague: (leagueId: number, data: { name: string }) =>
-    request<League>(`/leagues/${leagueId}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  deleteLeague: (leagueId: number) => request<any>(`/leagues/${leagueId}`, { method: 'DELETE' }),
+  createLeague: (seasonId: number, data: { name: string; invite_code?: string }) => post<League>(`/seasons/${seasonId}/leagues`, data),
+  updateLeague: (leagueId: number, data: { name: string }) => patch<League>(`/leagues/${leagueId}`, data),
+  deleteLeague: (leagueId: number) => del(`/leagues/${leagueId}`),
 
-  // ── Players (scoped + legacy) ──
-  getPlayers: () => request<any[]>('/players'),
-  getSeasonPlayers: (seasonId: number) => request<any[]>(`/seasons/${seasonId}/players`),
-  getPlayer: (id: number) => request<any>(`/players/${id}`),
-  updatePlayer: (id: number, data: any) => request<any>(`/players/${id}`, {
-    method: 'PATCH', body: JSON.stringify(data),
-  }),
-  createPlayer: (seasonId: number, data: { name: string; nickname?: string; original_seasons: string; tribe: string; photo_url?: string }) =>
-    request<any>(`/seasons/${seasonId}/players`, { method: 'POST', body: JSON.stringify(data) }),
-  bulkImportPlayers: (seasonId: number, players: any[]) =>
-    request<any[]>(`/seasons/${seasonId}/players/bulk`, { method: 'POST', body: JSON.stringify({ players }) }),
-  deletePlayer: (id: number) => request<any>(`/players/${id}`, { method: 'DELETE' }),
+  // Players
+  getSeasonPlayers: (seasonId: number, leagueId?: number) =>
+    request<Player[]>(`/seasons/${seasonId}/players${leagueId ? `?league_id=${leagueId}` : ''}`),
+  getPlayer: (id: number) => request<Player & { events: ScoringEvent[] }>(`/players/${id}`),
+  createPlayer: (seasonId: number, data: Partial<Player> & { name: string; tribe: string }) => post<Player>(`/seasons/${seasonId}/players`, data),
+  bulkImportPlayers: (seasonId: number, players: Partial<Player>[]) => post<Player[]>(`/seasons/${seasonId}/players/bulk`, { players }),
+  updatePlayer: (id: number, data: Partial<Player>) => patch<Player>(`/players/${id}`, data),
+  deletePlayer: (id: number) => del(`/players/${id}`),
 
-  // ── Teams (scoped + legacy) ──
-  getTeams: () => request<any[]>('/teams'),
-  getLeagueTeams: (leagueId: number) => request<any[]>(`/leagues/${leagueId}/teams`),
-  getTeam: (id: number) => request<any>(`/teams/${id}`),
-  createTeam: (data: { name: string; owner_name: string; draft_order?: number; league_id?: number }) =>
-    request<any>('/teams', { method: 'POST', body: JSON.stringify(data) }),
-  createLeagueTeam: (leagueId: number, data: { name: string; owner_name: string; draft_order?: number }) =>
-    request<any>(`/leagues/${leagueId}/teams`, { method: 'POST', body: JSON.stringify(data) }),
-  updateTeam: (id: number, data: { name?: string; owner_name?: string }) =>
-    request<any>(`/teams/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  deleteTeam: (id: number) => request<any>(`/teams/${id}`, { method: 'DELETE' }),
+  // Teams
+  getLeagueTeams: (leagueId: number) => request<Team[]>(`/leagues/${leagueId}/teams`),
+  getTeam: (id: number) => request<TeamDetail>(`/teams/${id}`),
+  createLeagueTeam: (leagueId: number, data: { name: string; owner_name: string; draft_order?: number }) => post<Team>(`/leagues/${leagueId}/teams`, data),
+  updateTeam: (id: number, data: { name?: string; owner_name?: string; draft_order?: number | null }) => patch<Team>(`/teams/${id}`, data),
+  deleteTeam: (id: number) => del(`/teams/${id}`),
 
-  // ── Draft (scoped + legacy) ──
-  getDraftState: () => request<any>('/draft/state'),
-  getLeagueDraftState: (leagueId: number) => request<any>(`/leagues/${leagueId}/draft/state`),
-  startDraft: () => request<any>('/draft/start', { method: 'POST' }),
-  startLeagueDraft: (leagueId: number) => request<any>(`/leagues/${leagueId}/draft/start`, { method: 'POST' }),
-  makePick: (team_id: number, player_id: number) =>
-    request<any>('/draft/pick', { method: 'POST', body: JSON.stringify({ team_id, player_id }) }),
-  makeLeaguePick: (leagueId: number, team_id: number, player_id: number) =>
-    request<any>(`/leagues/${leagueId}/draft/pick`, { method: 'POST', body: JSON.stringify({ team_id, player_id }) }),
-  undoPick: (playerId: number) => request<any>(`/draft/pick/${playerId}`, { method: 'DELETE' }),
-  undoLeaguePick: (leagueId: number, playerId: number) =>
-    request<any>(`/leagues/${leagueId}/draft/pick/${playerId}`, { method: 'DELETE' }),
-  resetDraft: () => request<any>('/draft/reset', { method: 'POST' }),
-  resetLeagueDraft: (leagueId: number) => request<any>(`/leagues/${leagueId}/draft/reset`, { method: 'POST' }),
+  // Draft
+  getLeagueDraftState: (leagueId: number) => request<DraftState>(`/leagues/${leagueId}/draft/state`),
+  startLeagueDraft: (leagueId: number) => post<DraftState>(`/leagues/${leagueId}/draft/start`),
+  pauseLeagueDraft: (leagueId: number) => post<DraftState>(`/leagues/${leagueId}/draft/pause`),
+  setDraftOrder: (leagueId: number, data: { team_ids?: number[]; randomize?: boolean; roster_size?: number | null; seconds_per_pick?: number | null; snake?: boolean }) =>
+    post<DraftState>(`/leagues/${leagueId}/draft/order`, data),
+  makeLeaguePick: (leagueId: number, team_id: number, player_id: number, force = false) =>
+    post<{ success: boolean; pick_number: number; is_complete: boolean }>(`/leagues/${leagueId}/draft/pick`, { team_id, player_id, force }),
+  undoLeaguePick: (leagueId: number, playerId: number) => del(`/leagues/${leagueId}/draft/pick/${playerId}`),
+  resetLeagueDraft: (leagueId: number) => post(`/leagues/${leagueId}/draft/reset`),
 
-  // ── Scoring (scoped + legacy) ──
-  getScoringRules: () => request<any[]>('/scoring/rules'),
-  getShowScoringRules: (showSlug: string) => request<any[]>(`/shows/${showSlug}/rules`),
-  createScoringRule: (data: { event_type: string; points: number; description: string; is_variable?: boolean; show_id?: number }) =>
-    request<any>('/scoring/rules', { method: 'POST', body: JSON.stringify(data) }),
+  // Scoring
+  getShowScoringRules: (showSlug: string) => request<ScoringRule[]>(`/shows/${showSlug}/rules`),
   createShowScoringRule: (showSlug: string, data: { event_type: string; points: number; description: string; is_variable?: boolean }) =>
-    request<any>(`/shows/${showSlug}/rules`, { method: 'POST', body: JSON.stringify(data) }),
-  updateScoringRule: (id: number, data: { event_type?: string; points?: number; description?: string; is_variable?: boolean }) =>
-    request<any>(`/scoring/rules/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  deleteScoringRule: (id: number) => request<any>(`/scoring/rules/${id}`, { method: 'DELETE' }),
-  getScoringEvents: (limit?: number) => request<any[]>(`/scoring/events?limit=${limit || 50}`),
-  getSeasonScoringEvents: (seasonId: number, limit?: number) =>
-    request<any[]>(`/seasons/${seasonId}/scoring/events?limit=${limit || 50}`),
-  addScoringEvent: (data: {
-    player_id: number; event_type: string; episode?: number; notes?: string; custom_points?: number;
-  }) => request<any>('/scoring/events', { method: 'POST', body: JSON.stringify(data) }),
-  deleteScoringEvent: (id: number) => request<any>(`/scoring/events/${id}`, { method: 'DELETE' }),
-  addBulkScoringEvents: (data: {
-    player_ids: number[]; event_type: string; episode?: number; notes?: string;
-  }) => request<any[]>('/scoring/events/bulk', { method: 'POST', body: JSON.stringify(data) }),
+    post<ScoringRule>(`/shows/${showSlug}/rules`, data),
+  updateScoringRule: (id: number, data: Partial<ScoringRule>) => patch<ScoringRule>(`/rules/${id}`, data),
+  deleteScoringRule: (id: number) => del(`/rules/${id}`),
+  getSeasonScoringEvents: (seasonId: number, opts?: { limit?: number; episode?: number }) => {
+    const q = new URLSearchParams();
+    if (opts?.limit) q.set('limit', String(opts.limit));
+    if (opts?.episode) q.set('episode', String(opts.episode));
+    const qs = q.toString();
+    return request<ScoringEvent[]>(`/seasons/${seasonId}/scoring/events${qs ? `?${qs}` : ''}`);
+  },
+  /** Add one or many scoring events in a single transaction. */
+  addScoringEvents: (seasonId: number, events: EventInput[]) =>
+    post<ScoringEvent[]>(`/seasons/${seasonId}/scoring/events`, { events }),
+  deleteScoringEvent: (id: number) => del(`/scoring/events/${id}`),
+  extractScoring: (seasonId: number, data: { episode: number; urls?: string[]; text?: string }) =>
+    post<Extraction>(`/seasons/${seasonId}/scoring/extract`, data),
 
-  // ── Summary (scoped + legacy) ──
-  getEpisodesWithEvents: () => request<{ episode: number; event_count: number }[]>('/summary/episodes'),
+  // Summary / recaps
   getLeagueEpisodesWithEvents: (leagueId: number) =>
     request<{ episode: number; event_count: number }[]>(`/leagues/${leagueId}/summary/episodes`),
-  getEpisodeEvents: (episode: number) => request<any[]>(`/summary/episodes/${episode}`),
-  getLeagueEpisodeEvents: (leagueId: number, episode: number) =>
-    request<any[]>(`/leagues/${leagueId}/summary/episodes/${episode}`),
-  generateEpisodeSummary: (episode: number) =>
-    request<{ episode: number; summary: string; event_count: number }>('/summary/generate', {
-      method: 'POST', body: JSON.stringify({ episode }),
-    }),
+  getLeagueEpisodeEvents: (leagueId: number, episode: number) => request<ScoringEvent[]>(`/leagues/${leagueId}/summary/episodes/${episode}`),
   generateLeagueEpisodeSummary: (leagueId: number, episode: number) =>
-    request<{ episode: number; summary: string; event_count: number }>(`/leagues/${leagueId}/summary/generate`, {
-      method: 'POST', body: JSON.stringify({ episode }),
-    }),
+    post<{ episode: number; summary: string; event_count: number }>(`/leagues/${leagueId}/summary/generate`, { episode }),
   generateTeamSeasonRecap: (leagueId: number, teamId: number) =>
-    request<{ team_name: string; owner_name: string; rank: number; total_score: number; recap: string }>(
-      `/leagues/${leagueId}/teams/${teamId}/recap/generate`, { method: 'POST' }
-    ),
+    post<{ team_name: string; owner_name: string; rank: number; total_score: number; recap: string }>(`/leagues/${leagueId}/teams/${teamId}/recap/generate`),
 
-  // ── Game State (legacy — works for backward compat) ──
-  getIdols: () => request<any[]>('/gamestate/idols'),
-  addIdol: (data: { player_id: number; label?: string; found_episode?: number; notes?: string }) =>
-    request<any>('/gamestate/idols', { method: 'POST', body: JSON.stringify(data) }),
-  updateIdol: (id: number, data: { played_episode?: number; is_active?: boolean; notes?: string }) =>
-    request<any>(`/gamestate/idols/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  deleteIdol: (id: number) => request<any>(`/gamestate/idols/${id}`, { method: 'DELETE' }),
+  // Game state
+  getIdols: (seasonId: number) => request<Idol[]>(`/seasons/${seasonId}/gamestate/idols`),
+  addIdol: (seasonId: number, data: { player_id: number; label?: string; found_episode?: number; notes?: string }) =>
+    post<Idol>(`/seasons/${seasonId}/gamestate/idols`, data),
+  updateIdol: (id: number, data: { played_episode?: number; is_active?: boolean; notes?: string }) => patch<Idol>(`/gamestate/idols/${id}`, data),
+  deleteIdol: (id: number) => del(`/gamestate/idols/${id}`),
+  getAdvantages: (seasonId: number) => request<Advantage[]>(`/seasons/${seasonId}/gamestate/advantages`),
+  addAdvantage: (seasonId: number, data: { player_id: number; advantage_type: string; found_episode?: number; notes?: string }) =>
+    post<Advantage>(`/seasons/${seasonId}/gamestate/advantages`, data),
+  updateAdvantage: (id: number, data: { played_episode?: number; is_active?: boolean; notes?: string }) => patch<Advantage>(`/gamestate/advantages/${id}`, data),
+  deleteAdvantage: (id: number) => del(`/gamestate/advantages/${id}`),
+  getAlliances: (seasonId: number) => request<Alliance[]>(`/seasons/${seasonId}/gamestate/alliances`),
+  createAlliance: (seasonId: number, data: { name: string; formed_episode?: number; notes?: string; member_ids?: number[] }) =>
+    post<Alliance>(`/seasons/${seasonId}/gamestate/alliances`, data),
+  updateAlliance: (id: number, data: { name?: string; is_active?: boolean; notes?: string; member_ids?: number[] }) => patch<Alliance>(`/gamestate/alliances/${id}`, data),
+  deleteAlliance: (id: number) => del(`/gamestate/alliances/${id}`),
 
-  getAdvantages: () => request<any[]>('/gamestate/advantages'),
-  addAdvantage: (data: { player_id: number; advantage_type: string; found_episode?: number; notes?: string }) =>
-    request<any>('/gamestate/advantages', { method: 'POST', body: JSON.stringify(data) }),
-  updateAdvantage: (id: number, data: { played_episode?: number; is_active?: boolean; notes?: string }) =>
-    request<any>(`/gamestate/advantages/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  deleteAdvantage: (id: number) => request<any>(`/gamestate/advantages/${id}`, { method: 'DELETE' }),
-
-  getAlliances: () => request<any[]>('/gamestate/alliances'),
-  createAlliance: (data: { name: string; formed_episode?: number; notes?: string; member_ids?: number[] }) =>
-    request<any>('/gamestate/alliances', { method: 'POST', body: JSON.stringify(data) }),
-  updateAlliance: (id: number, data: { name?: string; is_active?: boolean; notes?: string; member_ids?: number[] }) =>
-    request<any>(`/gamestate/alliances/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  deleteAlliance: (id: number) => request<any>(`/gamestate/alliances/${id}`, { method: 'DELETE' }),
-
-  // ── Tribes (legacy) ──
-  getTribes: () => request<any[]>('/tribes'),
-  getSeasonTribes: (seasonId: number) => request<any[]>(`/seasons/${seasonId}/tribes`),
-  createTribe: (data: { name: string; color: string; phase?: string; introduced_episode?: number }) =>
-    request<any>('/tribes', { method: 'POST', body: JSON.stringify(data) }),
-  performSwap: (data: {
-    episode: number;
-    assignments: { player_id: number; tribe_name: string }[];
-    new_tribes?: { name: string; color: string }[];
-  }) => request<any>('/tribes/swap', { method: 'POST', body: JSON.stringify(data) }),
-  performMerge: (data: { episode: number; tribe_name: string; tribe_color: string }) =>
-    request<any>('/tribes/merge', { method: 'POST', body: JSON.stringify(data) }),
+  // Tribes
+  getSeasonTribes: (seasonId: number) => request<Tribe[]>(`/seasons/${seasonId}/tribes`),
+  createTribe: (seasonId: number, data: { name: string; color: string; phase?: string; introduced_episode?: number }) =>
+    post<Tribe>(`/seasons/${seasonId}/tribes`, data),
+  updateTribe: (id: number, data: { name?: string; color?: string; is_active?: boolean }) => patch<Tribe>(`/tribes/${id}`, data),
+  deleteTribe: (id: number) => del(`/tribes/${id}`),
+  performSwap: (seasonId: number, data: { episode: number; assignments: { player_id: number; tribe_name: string }[]; new_tribes?: { name: string; color: string }[] }) =>
+    post<{ success: boolean; message: string }>(`/seasons/${seasonId}/tribes/swap`, data),
+  performMerge: (seasonId: number, data: { episode: number; tribe_name: string; tribe_color: string }) =>
+    post<{ success: boolean; message: string }>(`/seasons/${seasonId}/tribes/merge`, data),
 };
+
+/** Human-readable label for an event type, preferring the rule's description. */
+export function eventLabel(eventType: string, rules?: ScoringRule[]): string {
+  const rule = rules?.find((r) => r.event_type === eventType);
+  if (rule) return rule.description;
+  return eventType.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export function formatPoints(points: number): string {
+  const n = Number(points);
+  const s = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0$/, '');
+  return n > 0 ? `+${s}` : s;
+}
+
+export function ordinal(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}

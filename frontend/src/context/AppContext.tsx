@@ -1,5 +1,5 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useParams } from 'react-router-dom';
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { useMatch } from 'react-router-dom';
 import { api } from '../api';
 import { Show, Season, League } from '../types';
 
@@ -7,64 +7,74 @@ interface AppContextType {
   show: Show | null;
   season: Season | null;
   league: League | null;
+  /** URL prefix for the current league, e.g. /survivor/51/leagues/og51 (empty outside a league). */
+  leagueBase: string;
   loading: boolean;
   error: string | null;
+  refresh: () => void;
 }
 
 const AppContext = createContext<AppContextType>({
   show: null,
   season: null,
   league: null,
-  loading: true,
+  leagueBase: '',
+  loading: false,
   error: null,
+  refresh: () => {},
 });
 
+/**
+ * Resolves show / season / league from the URL for every page (including the navbar),
+ * so league navigation works anywhere under /:show/:season/leagues/:code.
+ */
 export function AppProvider({ children }: { children: ReactNode }) {
-  return (
-    <AppContext.Provider value={{ show: null, season: null, league: null, loading: false, error: null }}>
-      {children}
-    </AppContext.Provider>
-  );
-}
+  const match = useMatch('/:showSlug/:seasonNum/leagues/:inviteCode/*');
+  const showSlug = match?.params.showSlug;
+  const seasonNum = match?.params.seasonNum;
+  const inviteCode = match?.params.inviteCode;
 
-// Used inside LeagueLayout to provide full context from URL params
-export function LeagueContextProvider({ children }: { children: ReactNode }) {
-  const { showSlug, seasonNum, inviteCode } = useParams<{
-    showSlug: string;
-    seasonNum: string;
-    inviteCode: string;
-  }>();
   const [show, setShow] = useState<Show | null>(null);
   const [season, setSeason] = useState<Season | null>(null);
   const [league, setLeague] = useState<League | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
-    if (!showSlug || !seasonNum || !inviteCode) return;
-
+    if (!showSlug || !seasonNum || !inviteCode) {
+      setShow(null); setSeason(null); setLeague(null); setError(null); setLoading(false);
+      return;
+    }
+    let cancelled = false;
     setLoading(true);
     setError(null);
-
     Promise.all([
       api.getShow(showSlug),
       api.getSeasonBySlug(showSlug, parseInt(seasonNum)),
       api.getLeagueByInviteCode(inviteCode),
     ])
       .then(([showData, seasonData, leagueData]) => {
+        if (cancelled) return;
+        if (leagueData.season_id !== seasonData.id) throw new Error('That league belongs to a different season');
         setShow(showData);
         setSeason(seasonData);
         setLeague(leagueData);
       })
       .catch((err) => {
-        console.error('Failed to load context:', err);
+        if (cancelled) return;
+        setShow(null); setSeason(null); setLeague(null);
         setError(err.message);
       })
-      .finally(() => setLoading(false));
-  }, [showSlug, seasonNum, inviteCode]);
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [showSlug, seasonNum, inviteCode, tick]);
+
+  const refresh = useCallback(() => setTick((t) => t + 1), []);
+  const leagueBase = show && season && league ? `/${show.slug}/${season.season_number}/leagues/${league.invite_code}` : '';
 
   return (
-    <AppContext.Provider value={{ show, season, league, loading, error }}>
+    <AppContext.Provider value={{ show, season, league, leagueBase, loading, error, refresh }}>
       {children}
     </AppContext.Provider>
   );

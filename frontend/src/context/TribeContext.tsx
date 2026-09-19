@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { api } from '../api';
 import { Tribe } from '../types';
-import { useAppContext } from './AppContext';
 
 interface TribeContextType {
   tribes: Tribe[];
@@ -11,39 +10,35 @@ interface TribeContextType {
   refresh: () => void;
 }
 
+const DEFAULT_COLOR = '#D4A843';
+
 const TribeContext = createContext<TribeContextType>({
   tribes: [],
   activeTribes: [],
-  getTribeColor: () => '#D4A843',
+  getTribeColor: () => DEFAULT_COLOR,
   loading: true,
   refresh: () => {},
 });
 
-export function TribeProvider({ children }: { children: ReactNode }) {
-  const { season } = useAppContext();
+/** Loads the tribes for a season. Pass seasonId explicitly (admin) or it is read from the league context. */
+export function TribeProvider({ seasonId, children }: { seasonId: number | null | undefined; children: ReactNode }) {
   const [tribes, setTribes] = useState<Tribe[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadTribes = useCallback(() => {
-    const fetcher = season
-      ? api.getSeasonTribes(season.id)
-      : api.getTribes();
-
-    fetcher
+    if (!seasonId) { setTribes([]); setLoading(false); return; }
+    setLoading(true);
+    api.getSeasonTribes(seasonId)
       .then(setTribes)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [season]);
+  }, [seasonId]);
 
-  useEffect(() => {
-    loadTribes();
-  }, [loadTribes]);
+  useEffect(() => { loadTribes(); }, [loadTribes]);
 
   const activeTribes = tribes.filter(t => t.is_active);
-
   const getTribeColor = useCallback((name: string): string => {
-    const tribe = tribes.find(t => t.name === name);
-    return tribe?.color || '#D4A843';
+    return tribes.find(t => t.name === name)?.color || DEFAULT_COLOR;
   }, [tribes]);
 
   return (

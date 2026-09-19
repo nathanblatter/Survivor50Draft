@@ -29,7 +29,7 @@ services:
     depends_on:
       - app
 
-  # One-off seed runner: docker compose run --rm seed
+  # One-off season seeder: docker compose run --rm seed   (edit the slug to seed another season)
   seed:
     build: .
     profiles: ["tools"]
@@ -37,7 +37,7 @@ services:
       - "host.docker.internal:host-gateway"
     environment:
       DATABASE_URL: postgresql://postgres:postgres@host.docker.internal:5432/survivor50
-    command: ["node", "backend/dist/seed.js"]
+    command: ["node", "backend/dist/seed.js", "survivor-51"]
 
 networks:
   flightdeck:

@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Link } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import LandingPage from './pages/LandingPage';
 import ShowPage from './pages/ShowPage';
@@ -10,8 +10,10 @@ import ScoreboardPage from './pages/ScoreboardPage';
 import TeamDetailPage from './pages/TeamDetailPage';
 import LoginPage from './pages/LoginPage';
 import DraftPage from './pages/DraftPage';
-import AdminPage from './pages/AdminPage';
+import AdminPage from './pages/admin/AdminPage';
 import GameStatePage from './pages/GameStatePage';
+import RecapPage from './pages/RecapPage';
+import HallOfFamePage from './pages/HallOfFamePage';
 import BugReport from './components/BugReport';
 
 export default function App() {
@@ -20,40 +22,34 @@ export default function App() {
       <Navbar />
       <main className="main-content">
         <Routes>
-          {/* Landing / Browse */}
           <Route path="/" element={<LandingPage />} />
+          <Route path="/hall-of-fame" element={<HallOfFamePage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/admin" element={<AdminPage />} />
+
           <Route path="/:showSlug" element={<ShowPage />} />
           <Route path="/:showSlug/:seasonNum" element={<SeasonPage />} />
 
-          {/* League-scoped pages */}
           <Route path="/:showSlug/:seasonNum/leagues/:inviteCode" element={<LeagueLayout />}>
             <Route index element={<HomePage />} />
             <Route path="cast" element={<CastPage />} />
             <Route path="draft" element={<DraftPage />} />
             <Route path="scoreboard" element={<ScoreboardPage />} />
             <Route path="gamestate" element={<GameStatePage />} />
+            <Route path="recap" element={<RecapPage />} />
             <Route path="team/:id" element={<TeamDetailPage />} />
           </Route>
-
-          {/* Global */}
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/admin" element={<AdminPage />} />
-
-          {/* Backward compat redirects */}
-          <Route path="/cast" element={<Navigate to="/survivor/50/leagues/og-league/cast" replace />} />
-          <Route path="/draft" element={<Navigate to="/survivor/50/leagues/og-league/draft" replace />} />
-          <Route path="/scoreboard" element={<Navigate to="/survivor/50/leagues/og-league/scoreboard" replace />} />
-          <Route path="/gamestate" element={<Navigate to="/survivor/50/leagues/og-league/gamestate" replace />} />
-          <Route path="/team/:id" element={<Navigate to="/survivor/50/leagues/og-league" replace />} />
         </Routes>
       </main>
       <footer className="footer">
         <div className="footer-inner">
-          <p className="footer-brand">🔥 Fantasy Draft League</p>
+          <p className="footer-brand">🔥 Survivor Fantasy Draft</p>
           <p className="footer-links">
-            <a href="/" className="footer-link">Browse Shows</a>
+            <Link to="/survivor" className="footer-link">Seasons</Link>
             <span className="footer-sep">·</span>
-            <a href="/login" className="footer-link">Admin</a>
+            <Link to="/hall-of-fame" className="footer-link">Hall of Fame</Link>
+            <span className="footer-sep">·</span>
+            <Link to="/login" className="footer-link">Admin</Link>
           </p>
         </div>
       </footer>

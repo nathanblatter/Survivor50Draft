@@ -1,10 +1,21 @@
 import { Router, Request, Response } from 'express';
 import pool from '../db';
 import { authMiddleware } from '../middleware/auth';
+import { insertEvents, ScoringError, seasonForPlayer, EventInput } from '../lib/scoring';
 
 const router = Router();
 
-// ── Scoped: GET /api/shows/:showSlug/rules ──
+function sendScoringError(res: Response, err: unknown, fallback: string) {
+  if (err instanceof ScoringError) {
+    res.status(err.status).json({ error: err.message });
+    return;
+  }
+  console.error(err);
+  res.status(500).json({ error: fallback });
+}
+
+// ── Rules (show-scoped) ──
+
 router.get('/shows/:showSlug/rules', async (req: Request, res: Response) => {
   try {
     const { showSlug } = req.params;
@@ -17,14 +28,13 @@ router.get('/shows/:showSlug/rules', async (req: Request, res: Response) => {
       'SELECT * FROM scoring_rules WHERE show_id = $1 ORDER BY id',
       [showResult.rows[0].id]
     );
-    res.json(result.rows);
+    res.json(result.rows.map((r: any) => ({ ...r, points: parseFloat(r.points) })));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch scoring rules' });
   }
 });
 
-// ── Scoped: POST /api/shows/:showSlug/rules ──
 router.post('/shows/:showSlug/rules', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { showSlug } = req.params;
@@ -40,7 +50,7 @@ router.post('/shows/:showSlug/rules', authMiddleware, async (req: Request, res: 
     }
     const result = await pool.query(
       'INSERT INTO scoring_rules (show_id, event_type, points, description, is_variable) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [showResult.rows[0].id, event_type, points, description, is_variable || false]
+      [showResult.rows[0].id, String(event_type).trim(), points, description, is_variable || false]
     );
     res.status(201).json(result.rows[0]);
   } catch (err: any) {
@@ -53,69 +63,18 @@ router.post('/shows/:showSlug/rules', authMiddleware, async (req: Request, res: 
   }
 });
 
-// ── Scoped: GET /api/seasons/:seasonId/scoring/events ──
-router.get('/seasons/:seasonId/scoring/events', async (req: Request, res: Response) => {
-  try {
-    const { seasonId } = req.params;
-    const { limit = 50 } = req.query;
-    const result = await pool.query(`
-      SELECT se.*, p.name as player_name, p.tribe
-      FROM scoring_events se
-      JOIN players p ON p.id = se.player_id
-      WHERE p.season_id = $1
-      ORDER BY se.created_at DESC
-      LIMIT $2
-    `, [seasonId, limit]);
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch scoring events' });
-  }
-});
-
-// ── Legacy: GET /api/scoring/rules ──
-router.get('/rules', async (_req: Request, res: Response) => {
-  try {
-    const result = await pool.query('SELECT * FROM scoring_rules ORDER BY id');
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch scoring rules' });
-  }
-});
-
-// ── POST /api/scoring/rules (legacy, uses first show) ──
-router.post('/rules', authMiddleware, async (req: Request, res: Response) => {
-  try {
-    const { event_type, points, description, is_variable, show_id } = req.body;
-    if (!event_type || points === undefined || !description) {
-      res.status(400).json({ error: 'event_type, points, and description are required' });
-      return;
-    }
-    let sid = show_id;
-    if (!sid) {
-      const defaultShow = await pool.query('SELECT id FROM shows ORDER BY id LIMIT 1');
-      sid = defaultShow.rows[0]?.id;
-    }
-    const result = await pool.query(
-      'INSERT INTO scoring_rules (show_id, event_type, points, description, is_variable) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [sid, event_type, points, description, is_variable || false]
-    );
-    res.status(201).json(result.rows[0]);
-  } catch (err: any) {
-    if (err.code === '23505') {
-      res.status(400).json({ error: 'A rule with that event type already exists' });
-      return;
-    }
-    console.error(err);
-    res.status(500).json({ error: 'Failed to create scoring rule' });
-  }
-});
-
 router.patch('/rules/:id', authMiddleware, async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { event_type, points, description, is_variable } = req.body;
+  const client = await pool.connect();
   try {
-    const { id } = req.params;
-    const { event_type, points, description, is_variable } = req.body;
+    await client.query('BEGIN');
+    const current = await client.query('SELECT * FROM scoring_rules WHERE id = $1', [id]);
+    if (current.rows.length === 0) {
+      await client.query('ROLLBACK');
+      res.status(404).json({ error: 'Scoring rule not found' });
+      return;
+    }
     const fields: string[] = [];
     const values: any[] = [];
     let idx = 1;
@@ -124,33 +83,42 @@ router.patch('/rules/:id', authMiddleware, async (req: Request, res: Response) =
     if (description !== undefined) { fields.push(`description = $${idx++}`); values.push(description); }
     if (is_variable !== undefined) { fields.push(`is_variable = $${idx++}`); values.push(is_variable); }
     if (fields.length === 0) {
+      await client.query('ROLLBACK');
       res.status(400).json({ error: 'Provide at least one field to update' });
       return;
     }
     values.push(id);
-    const result = await pool.query(
+    const result = await client.query(
       `UPDATE scoring_rules SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
       values
     );
-    if (result.rows.length === 0) {
-      res.status(404).json({ error: 'Scoring rule not found' });
-      return;
+    // Keep historical events pointing at the renamed rule.
+    if (event_type !== undefined && event_type !== current.rows[0].event_type) {
+      await client.query(
+        `UPDATE scoring_events se SET event_type = $1
+         FROM players p JOIN seasons s ON s.id = p.season_id
+         WHERE se.player_id = p.id AND s.show_id = $2 AND se.event_type = $3`,
+        [event_type, current.rows[0].show_id, current.rows[0].event_type]
+      );
     }
+    await client.query('COMMIT');
     res.json(result.rows[0]);
   } catch (err: any) {
+    await client.query('ROLLBACK');
     if (err.code === '23505') {
       res.status(400).json({ error: 'A rule with that event type already exists' });
       return;
     }
     console.error(err);
     res.status(500).json({ error: 'Failed to update scoring rule' });
+  } finally {
+    client.release();
   }
 });
 
 router.delete('/rules/:id', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    const result = await pool.query('DELETE FROM scoring_rules WHERE id = $1 RETURNING *', [id]);
+    const result = await pool.query('DELETE FROM scoring_rules WHERE id = $1 RETURNING *', [req.params.id]);
     if (result.rows.length === 0) {
       res.status(404).json({ error: 'Scoring rule not found' });
       return;
@@ -162,139 +130,99 @@ router.delete('/rules/:id', authMiddleware, async (req: Request, res: Response) 
   }
 });
 
-router.get('/events', async (req: Request, res: Response) => {
+// ── Events (season-scoped) ──
+
+// GET /api/seasons/:seasonId/scoring/events?limit=&episode=
+router.get('/seasons/:seasonId/scoring/events', async (req: Request, res: Response) => {
   try {
-    const { limit = 50 } = req.query;
+    const { seasonId } = req.params;
+    const limit = Math.min(parseInt(String(req.query.limit || 100)) || 100, 2000);
+    const episode = req.query.episode ? parseInt(String(req.query.episode)) : null;
+    const params: any[] = [seasonId];
+    let where = 'WHERE p.season_id = $1';
+    if (episode) { params.push(episode); where += ` AND se.episode = $${params.length}`; }
+    params.push(limit);
     const result = await pool.query(`
       SELECT se.*, p.name as player_name, p.tribe
       FROM scoring_events se
       JOIN players p ON p.id = se.player_id
-      ORDER BY se.created_at DESC
-      LIMIT $1
-    `, [limit]);
-    res.json(result.rows);
+      ${where}
+      ORDER BY se.created_at DESC, se.id DESC
+      LIMIT $${params.length}
+    `, params);
+    res.json(result.rows.map((r: any) => ({ ...r, points: parseFloat(r.points) })));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch scoring events' });
   }
 });
 
-router.post('/events', authMiddleware, async (req: Request, res: Response) => {
+// POST /api/seasons/:seasonId/scoring/events — one or many events, all-or-nothing
+router.post('/seasons/:seasonId/scoring/events', authMiddleware, async (req: Request, res: Response) => {
+  const seasonId = parseInt(req.params.seasonId as string);
+  const body = req.body;
+  const events: EventInput[] = Array.isArray(body?.events) ? body.events : [body];
+  const client = await pool.connect();
   try {
-    const { player_id, event_type, episode, notes, custom_points } = req.body;
-    if (!player_id || !event_type) {
-      res.status(400).json({ error: 'player_id and event_type are required' });
-      return;
-    }
-
-    let points: number;
-
-    if (event_type === 'placement') {
-      const placement = custom_points;
-      // Get cast_count from the player's season
-      const seasonResult = await pool.query(
-        'SELECT s.cast_count FROM seasons s JOIN players p ON p.season_id = s.id WHERE p.id = $1',
-        [player_id]
-      );
-      const castCount = seasonResult.rows[0]?.cast_count || 24;
-
-      if (!placement || placement < 1 || placement > castCount) {
-        res.status(400).json({ error: `Placement must be between 1 and ${castCount}` });
-        return;
-      }
-      points = castCount + 1 - placement;
-
-      await pool.query(
-        'UPDATE players SET placement = $1, is_eliminated = $2 WHERE id = $3',
-        [placement, placement > 1, player_id]
-      );
-    } else {
-      // Look up points from scoring rules (scoped by the player's show)
-      const ruleResult = await pool.query(`
-        SELECT sr.points FROM scoring_rules sr
-        JOIN shows sh ON sh.id = sr.show_id
-        JOIN seasons s ON s.show_id = sh.id
-        JOIN players p ON p.season_id = s.id
-        WHERE sr.event_type = $1 AND p.id = $2
-        LIMIT 1
-      `, [event_type, player_id]);
-
-      if (ruleResult.rows.length === 0) {
-        // Fallback: try global lookup for backward compat
-        const fallback = await pool.query(
-          'SELECT points FROM scoring_rules WHERE event_type = $1 LIMIT 1',
-          [event_type]
-        );
-        if (fallback.rows.length === 0) {
-          res.status(400).json({ error: 'Unknown event type' });
-          return;
-        }
-        points = parseFloat(fallback.rows[0].points);
-      } else {
-        points = parseFloat(ruleResult.rows[0].points);
-      }
-    }
-
-    const result = await pool.query(
-      'INSERT INTO scoring_events (player_id, event_type, points, episode, notes) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [player_id, event_type, points, episode || null, notes || null]
-    );
-
-    const playerResult = await pool.query('SELECT name FROM players WHERE id = $1', [player_id]);
-
-    res.status(201).json({
-      ...result.rows[0],
-      player_name: playerResult.rows[0]?.name,
-    });
+    await client.query('BEGIN');
+    const inserted = await insertEvents(client, seasonId, events);
+    await client.query('COMMIT');
+    res.status(201).json(inserted);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to add scoring event' });
+    await client.query('ROLLBACK');
+    sendScoringError(res, err, 'Failed to add scoring events');
+  } finally {
+    client.release();
   }
 });
 
-router.delete('/events/:id', authMiddleware, async (req: Request, res: Response) => {
+// Convenience: add events for a single player without knowing the season
+router.post('/players/:playerId/events', authMiddleware, async (req: Request, res: Response) => {
+  const playerId = parseInt(req.params.playerId as string);
+  const client = await pool.connect();
   try {
-    const { id } = req.params;
-    await pool.query('DELETE FROM scoring_events WHERE id = $1', [id]);
+    await client.query('BEGIN');
+    const seasonId = await seasonForPlayer(client, playerId);
+    const inserted = await insertEvents(client, seasonId, [{ ...req.body, player_id: playerId }]);
+    await client.query('COMMIT');
+    res.status(201).json(inserted[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    sendScoringError(res, err, 'Failed to add scoring event');
+  } finally {
+    client.release();
+  }
+});
+
+router.delete('/scoring/events/:id', authMiddleware, async (req: Request, res: Response) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const del = await client.query('DELETE FROM scoring_events WHERE id = $1 RETURNING *', [req.params.id]);
+    if (del.rows.length === 0) {
+      await client.query('ROLLBACK');
+      res.status(404).json({ error: 'Event not found' });
+      return;
+    }
+    // Deleting a placement event un-eliminates the player (unless another placement event remains).
+    const ev = del.rows[0];
+    if (ev.event_type === 'placement') {
+      const other = await client.query(
+        "SELECT 1 FROM scoring_events WHERE player_id = $1 AND event_type = 'placement' LIMIT 1",
+        [ev.player_id]
+      );
+      if (other.rows.length === 0) {
+        await client.query('UPDATE players SET is_eliminated = false, placement = NULL WHERE id = $1', [ev.player_id]);
+      }
+    }
+    await client.query('COMMIT');
     res.json({ success: true });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error(err);
     res.status(500).json({ error: 'Failed to delete scoring event' });
-  }
-});
-
-router.post('/events/bulk', authMiddleware, async (req: Request, res: Response) => {
-  try {
-    const { player_ids, event_type, episode, notes } = req.body;
-    if (!player_ids || !Array.isArray(player_ids) || !event_type) {
-      res.status(400).json({ error: 'player_ids array and event_type are required' });
-      return;
-    }
-
-    // Look up points from scoring rules
-    const ruleResult = await pool.query(
-      'SELECT points FROM scoring_rules WHERE event_type = $1 LIMIT 1',
-      [event_type]
-    );
-    if (ruleResult.rows.length === 0) {
-      res.status(400).json({ error: 'Unknown event type' });
-      return;
-    }
-    const points = parseFloat(ruleResult.rows[0].points);
-
-    const results = [];
-    for (const pid of player_ids) {
-      const result = await pool.query(
-        'INSERT INTO scoring_events (player_id, event_type, points, episode, notes) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-        [pid, event_type, points, episode || null, notes || null]
-      );
-      results.push(result.rows[0]);
-    }
-
-    res.status(201).json(results);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to add bulk scoring events' });
+  } finally {
+    client.release();
   }
 });
 
