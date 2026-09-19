@@ -79,7 +79,6 @@ export default function SeasonsTab() {
               {season.is_active
                 ? <button className="btn btn-secondary btn-small" onClick={() => update({ is_active: false }, 'Season hidden from the landing page')}>Hide from landing</button>
                 : <button className="btn btn-secondary btn-small" onClick={() => update({ is_active: true }, 'Season is active')}>Set active</button>}
-              <button className="btn btn-danger btn-small" onClick={remove}>Delete season</button>
             </div>
           </div>
         </div>
@@ -112,6 +111,14 @@ export default function SeasonsTab() {
           After creating: add tribes and the cast (Cast & Tribes), then create a league (Leagues). Scoring rules are shared per show.
         </p>
       </form>
+
+      {season && (
+        <details className="danger-zone">
+          <summary>Danger zone</summary>
+          <p className="text-muted">Deleting {season.show_name} {season.season_number} removes its cast, leagues, teams and every scoring event. There is no undo.</p>
+          <button className="btn btn-danger btn-small" onClick={remove}>Delete this season</button>
+        </details>
+      )}
 
       <div className="recent-events">
         <h3>All seasons</h3>

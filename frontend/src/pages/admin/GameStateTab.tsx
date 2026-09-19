@@ -49,7 +49,6 @@ export default function GameStateTab() {
 
   return (
     <div className="admin-tab-content">
-      <p className="summary-desc">Track who holds what. Finding or playing an idol also needs a score — the Log Episode tab does both at once.</p>
       <div className="challenge-type-grid three">
         {(['idols', 'advantages', 'alliances'] as Section[]).map(s => (
           <button key={s} className={`challenge-type-btn ${section === s ? 'active' : ''}`} onClick={() => setSection(s)}>
@@ -175,7 +174,7 @@ export default function GameStateTab() {
             </div>
             <div className="form-group">
               <label>Members ({allianceMembers.length}) — tap to toggle</label>
-              <div className="bulk-player-grid">
+              <div className="pick-grid">
                 {activePlayers.map(p => <PlayerCard key={p.id} player={p} compact selected={allianceMembers.includes(p.id)} onClick={() => setAllianceMembers(m => m.includes(p.id) ? m.filter(x => x !== p.id) : [...m, p.id])} />)}
               </div>
             </div>

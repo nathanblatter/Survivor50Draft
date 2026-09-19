@@ -92,7 +92,7 @@ export default function ScoresTab() {
         </div>
         <div className="form-group">
           <label>{isPlacement ? 'Player' : `Players (${selectedPlayers.length} selected — tap to toggle)`}</label>
-          <div className="bulk-player-grid">
+          <div className="pick-grid">
             {pool.map(p => (
               <PlayerCard key={p.id} player={p} compact selected={selectedPlayers.includes(p.id)}
                 onClick={() => setSelectedPlayers(prev => isPlacement ? [p.id] : prev.includes(p.id) ? prev.filter(x => x !== p.id) : [...prev, p.id])} />
