@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import pool from '../db';
 import { authMiddleware } from '../middleware/auth';
-import { insertEvents, ScoringError, seasonForPlayer, EventInput } from '../lib/scoring';
+import { insertEvents, ScoringError, seasonForPlayer, setEpisodeNeutral, EventInput } from '../lib/scoring';
 
 const router = Router();
 
@@ -171,6 +171,26 @@ router.post('/seasons/:seasonId/scoring/events', authMiddleware, async (req: Req
   } catch (err) {
     await client.query('ROLLBACK');
     sendScoringError(res, err, 'Failed to add scoring events');
+  } finally {
+    client.release();
+  }
+});
+
+// PATCH /api/seasons/:seasonId/scoring/episodes/:episode { is_neutral } — score an episode 0 (kept for history) or restore it
+router.patch('/seasons/:seasonId/scoring/episodes/:episode', authMiddleware, async (req: Request, res: Response) => {
+  const seasonId = parseInt(req.params.seasonId as string);
+  const episode = parseInt(req.params.episode as string);
+  const { is_neutral } = req.body || {};
+  if (typeof is_neutral !== 'boolean') { res.status(400).json({ error: 'is_neutral (boolean) is required' }); return; }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const changed = await setEpisodeNeutral(client, seasonId, episode, is_neutral);
+    await client.query('COMMIT');
+    res.json({ episode, is_neutral, changed });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    sendScoringError(res, err, 'Failed to update episode');
   } finally {
     client.release();
   }

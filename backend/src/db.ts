@@ -199,6 +199,7 @@ export async function initDB() {
       ALTER TABLE leagues ADD COLUMN IF NOT EXISTS roster_size INTEGER;
       ALTER TABLE draft_state ADD COLUMN IF NOT EXISTS pick_deadline TIMESTAMPTZ;
       ALTER TABLE draft_state ADD COLUMN IF NOT EXISTS seconds_per_pick INTEGER;
+      ALTER TABLE scoring_events ADD COLUMN IF NOT EXISTS is_neutral BOOLEAN NOT NULL DEFAULT FALSE;
     `);
 
     // Older databases created these FKs without ON DELETE CASCADE; deleting a season/league needs it.

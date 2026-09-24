@@ -105,6 +105,8 @@ export interface ScoringEvent {
   points: number;
   episode: number | null;
   notes: string | null;
+  /** Recorded for history but scored 0 (e.g. aired before the draft). */
+  is_neutral: boolean;
   tribe: string;
   created_at: string;
 }
@@ -115,6 +117,8 @@ export interface EventInput {
   episode?: number | null;
   notes?: string | null;
   placement?: number | null;
+  /** Record but score 0 (placement is never neutral). */
+  neutral?: boolean;
 }
 
 export interface DraftState {
@@ -242,10 +246,21 @@ export interface ExtractionProposal {
   problem: string | null;
 }
 
+export interface ExtractionAlliance {
+  name: string;
+  status: 'new' | 'updated' | 'dissolved';
+  existing_id: number | null;
+  members: { player_id: number | null; player_name: string }[];
+  evidence: string;
+  confidence: 'high' | 'medium' | 'low';
+  problem: string | null;
+}
+
 export interface Extraction {
   episode: number;
   proposals: ExtractionProposal[];
   eliminated: { player_id: number | null; player_name: string; votes_received: number; had_idol: boolean; how: string }[];
+  alliances: ExtractionAlliance[];
   summary: string;
   warnings: string[];
   usage: { input_tokens: number; output_tokens: number; model: string };

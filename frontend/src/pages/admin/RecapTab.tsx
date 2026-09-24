@@ -91,7 +91,7 @@ export default function RecapTab() {
               <thead><tr><th>Player</th><th>Event</th><th>Pts</th><th>Notes</th></tr></thead>
               <tbody>
                 {events.map(ev => (
-                  <tr key={ev.id}><td>{ev.player_name}</td><td>{eventLabel(ev.event_type, rules)}</td><td className={ev.points >= 0 ? 'positive' : 'negative'}>{formatPoints(ev.points)}</td><td>{ev.notes || '—'}</td></tr>
+                  <tr key={ev.id}><td>{ev.player_name}</td><td>{eventLabel(ev.event_type, rules)}</td><td className={ev.points >= 0 ? 'positive' : 'negative'}>{formatPoints(ev.points)}{ev.is_neutral && <span className="neutral-badge">pre-draft</span>}</td><td>{ev.notes || '—'}</td></tr>
                 ))}
               </tbody>
             </table>

@@ -15,6 +15,31 @@ const SHOT_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 
 type Shot = { file: File; url: string };
 
+// The launcher can be dragged anywhere so it never sits on top of a control (it once hid the
+// draft button). The spot is remembered per browser; a plain tap still opens the form.
+const POS_KEY = 's50-bug-launch-pos';
+const DRAG_THRESHOLD = 6;
+type Pos = { x: number; y: number };
+
+function loadPos(): Pos | null {
+  try {
+    const raw = localStorage.getItem(POS_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw);
+    return typeof p?.x === 'number' && typeof p?.y === 'number' ? p : null;
+  } catch { return null; }
+}
+function savePos(p: Pos | null) {
+  try { p ? localStorage.setItem(POS_KEY, JSON.stringify(p)) : localStorage.removeItem(POS_KEY); } catch { /* private mode etc. */ }
+}
+function clampPos(p: Pos, el: HTMLElement | null): Pos {
+  const w = el?.offsetWidth || 140, h = el?.offsetHeight || 40, m = 8;
+  return {
+    x: Math.min(Math.max(p.x, m), Math.max(m, window.innerWidth - w - m)),
+    y: Math.min(Math.max(p.y, m), Math.max(m, window.innerHeight - h - m)),
+  };
+}
+
 // Scoped styles, built from the app's war-room CSS custom properties so the
 // widget reads as native (Teko display, ember-orange, fire-lit dark cards).
 const CSS = `
@@ -22,6 +47,9 @@ const CSS = `
   font-family:'Teko',sans-serif;font-size:18px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
   color:#1a1208;background:var(--fire-orange,#FF6B35);border:0;border-radius:6px;padding:8px 16px;cursor:pointer;
   box-shadow:0 6px 20px rgba(255,107,53,.35);transition:transform .15s ease,box-shadow .15s ease}
+.s50-launch{touch-action:none;user-select:none;-webkit-user-select:none}
+.s50-launch.placed{bottom:auto;right:auto}
+.s50-launch.dragging{transition:none;cursor:grabbing;box-shadow:0 14px 30px rgba(255,107,53,.55)}
 .s50-launch:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(255,107,53,.5)}
 .s50-launch:focus-visible{outline:2px solid var(--gold-bright,#F0C75E);outline-offset:2px}
 .s50-scrim{position:fixed;inset:0;z-index:9001;background:rgba(5,5,3,.72);display:flex;align-items:center;justify-content:center;padding:16px}
@@ -73,6 +101,46 @@ export default function BugReport() {
   const fileRef = useRef<HTMLInputElement>(null);
   const shotsRef = useRef<Shot[]>([]);
   shotsRef.current = shots;
+  const launchRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<Pos | null>(() => loadPos());
+  const [dragging, setDragging] = useState(false);
+  const drag = useRef<{ id: number; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null);
+
+  // Keep a remembered spot on screen when the window shrinks.
+  useEffect(() => {
+    if (!pos) return;
+    const onResize = () => setPos((p) => (p ? clampPos(p, launchRef.current) : p));
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [pos]);
+
+  function onLaunchPointerDown(e: React.PointerEvent<HTMLButtonElement>) {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    drag.current = { id: e.pointerId, startX: e.clientX, startY: e.clientY, originX: rect.left, originY: rect.top, moved: false };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  function onLaunchPointerMove(e: React.PointerEvent<HTMLButtonElement>) {
+    const d = drag.current;
+    if (!d || d.id !== e.pointerId) return;
+    const dx = e.clientX - d.startX, dy = e.clientY - d.startY;
+    if (!d.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+    d.moved = true;
+    setDragging(true);
+    setPos(clampPos({ x: d.originX + dx, y: d.originY + dy }, e.currentTarget));
+  }
+  function onLaunchPointerUp(e: React.PointerEvent<HTMLButtonElement>) {
+    const d = drag.current;
+    if (!d || d.id !== e.pointerId) return;
+    drag.current = null;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    if (d.moved) {
+      setDragging(false);
+      setPos((p) => { savePos(p); return p; });
+    } else {
+      setOpen(true);
+    }
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -176,7 +244,19 @@ export default function BugReport() {
   return (
     <>
       <style>{CSS}</style>
-      <button type="button" className="s50-launch" onClick={() => setOpen(true)} aria-label="Report a bug">
+      <button
+        type="button"
+        ref={launchRef}
+        className={`s50-launch${pos ? ' placed' : ''}${dragging ? ' dragging' : ''}`}
+        style={pos ? { left: pos.x, top: pos.y } : undefined}
+        onPointerDown={onLaunchPointerDown}
+        onPointerMove={onLaunchPointerMove}
+        onPointerUp={onLaunchPointerUp}
+        onPointerCancel={() => { drag.current = null; setDragging(false); }}
+        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), setOpen(true))}
+        aria-label="Report a bug (drag to move)"
+        title="Drag to move"
+      >
         🔥 Report a bug
       </button>
 

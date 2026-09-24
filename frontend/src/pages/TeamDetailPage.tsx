@@ -103,7 +103,7 @@ export default function TeamDetailPage() {
                     <td>{event.episode ?? '—'}</td>
                     <td className="log-player">{event.player_name}</td>
                     <td>{eventLabel(event.event_type, rules)}{event.notes ? <span className="log-note"> — {event.notes}</span> : null}</td>
-                    <td className={`points-cell ${event.points >= 0 ? 'positive' : 'negative'}`}>{formatPoints(event.points)}</td>
+                    <td className={`points-cell ${event.points >= 0 ? 'positive' : 'negative'}`}>{formatPoints(event.points)}{event.is_neutral && <span className="neutral-badge" title="Aired before the draft — recorded, not scored">pre-draft</span>}</td>
                   </tr>
                 ))}
               </tbody>

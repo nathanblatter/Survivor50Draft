@@ -9,6 +9,11 @@ export interface EventInput {
   placement?: number | null;
   /** Legacy alias for placement (older admin UI sent placement as custom_points). */
   custom_points?: number | null;
+  /**
+   * Record the event for history but score it 0 (e.g. an episode that aired before the draft).
+   * Placement is never neutralised: a boot's finishing points stand regardless.
+   */
+  neutral?: boolean;
 }
 
 export class ScoringError extends Error {
@@ -79,9 +84,12 @@ export async function insertEvents(client: PoolClient, seasonId: number, events:
       );
     }
 
+    const neutral = Boolean(e.neutral) && e.event_type !== 'placement';
+    if (neutral) points = 0;
+
     const res = await client.query(
-      'INSERT INTO scoring_events (player_id, event_type, points, episode, notes) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [e.player_id, e.event_type, points, e.episode ?? null, e.notes ?? null]
+      'INSERT INTO scoring_events (player_id, event_type, points, episode, notes, is_neutral) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [e.player_id, e.event_type, points, e.episode ?? null, e.notes ?? null, neutral]
     );
     inserted.push({ ...res.rows[0], player_name: playerNames.get(Number(e.player_id)) });
   }
@@ -93,4 +101,30 @@ export async function seasonForPlayer(client: PoolClient, playerId: number): Pro
   const r = await client.query('SELECT season_id FROM players WHERE id = $1', [playerId]);
   if (r.rows.length === 0) throw new ScoringError('Player not found', 404);
   return r.rows[0].season_id;
+}
+
+/**
+ * Flip a whole episode between scored and neutral (recorded, 0 points). Neutral → points 0;
+ * scored → points restored from the show's current rules. Placement events are left untouched.
+ * Returns the number of events changed.
+ */
+export async function setEpisodeNeutral(client: PoolClient, seasonId: number, episode: number, neutral: boolean): Promise<number> {
+  if (!Number.isInteger(episode) || episode < 1) throw new ScoringError('Invalid episode');
+  const seasonRes = await client.query<SeasonInfo>('SELECT id, show_id, cast_count FROM seasons WHERE id = $1', [seasonId]);
+  if (seasonRes.rows.length === 0) throw new ScoringError('Season not found', 404);
+  const showId = seasonRes.rows[0].show_id;
+  const res = neutral
+    ? await client.query(
+        `UPDATE scoring_events se SET points = 0, is_neutral = TRUE
+         FROM players p WHERE p.id = se.player_id AND p.season_id = $1 AND se.episode = $2 AND se.event_type <> 'placement'`,
+        [seasonId, episode]
+      )
+    : await client.query(
+        `UPDATE scoring_events se SET points = r.points, is_neutral = FALSE
+         FROM players p, scoring_rules r
+         WHERE p.id = se.player_id AND p.season_id = $1 AND se.episode = $2 AND se.event_type <> 'placement'
+           AND r.show_id = $3 AND r.event_type = se.event_type`,
+        [seasonId, episode, showId]
+      );
+  return res.rowCount ?? 0;
 }

@@ -77,6 +77,20 @@ export default function ScoresTab() {
   };
 
   const episodesInLog = [...new Set(events.map(e => e.episode).filter((x): x is number => x !== null))].sort((a, b) => b - a);
+  const shownEpisode = logEpisode !== 'all' ? logEpisode : null;
+  const shownNeutral = shownEpisode !== null && events.some(e => e.event_type !== 'placement') && events.filter(e => e.event_type !== 'placement').every(e => e.is_neutral);
+  const toggleNeutral = async () => {
+    if (!season || shownEpisode === null) return;
+    const next = !shownNeutral;
+    if (!window.confirm(next
+      ? `Score episode ${shownEpisode} as neutral? Every event keeps its record but drops to 0 points (placement still counts).`
+      : `Restore episode ${shownEpisode} scoring from the current rules?`)) return;
+    try {
+      const r = await api.setEpisodeNeutral(season.id, shownEpisode, next);
+      flash(`Episode ${shownEpisode} ${next ? 'is now neutral' : 'scoring restored'} — ${r.changed} events updated`);
+      loadEvents(); refresh();
+    } catch (err: any) { flash(err.message, 'error'); }
+  };
   const pool = selectedPlayers.length && isPlacement ? players : (eventType === 'votes_for_winner' || eventType === 'placement' ? players : activePlayers);
 
   return (
@@ -129,6 +143,11 @@ export default function ScoresTab() {
         <div className="tribe-filters compact" style={{ padding: '0.75rem 1rem' }}>
           <button className={`tribe-filter ${logEpisode === 'all' ? 'active' : ''}`} onClick={() => setLogEpisode('all')}>All</button>
           {episodesInLog.map(e => <button key={e} className={`tribe-filter ${logEpisode === e ? 'active' : ''}`} onClick={() => setLogEpisode(e)}>Ep {e}</button>)}
+          {shownEpisode !== null && events.length > 0 && (
+            <button className="btn btn-secondary btn-small" style={{ marginLeft: 'auto' }} onClick={toggleNeutral}>
+              {shownNeutral ? `Ep ${shownEpisode} is neutral (0 pts) — restore scoring` : `Score ep ${shownEpisode} as neutral`}
+            </button>
+          )}
         </div>
         <div className="rules-table-container">
           <table className="log-table">
@@ -139,7 +158,7 @@ export default function ScoresTab() {
                   <td>{ev.episode ?? '—'}</td>
                   <td>{ev.player_name}</td>
                   <td>{eventLabel(ev.event_type, rules)}</td>
-                  <td className={ev.points >= 0 ? 'positive' : 'negative'}>{formatPoints(ev.points)}</td>
+                  <td className={ev.points >= 0 ? 'positive' : 'negative'}>{formatPoints(ev.points)}{ev.is_neutral && <span className="neutral-badge" title="Recorded for history, not scored">pre-draft</span>}</td>
                   <td className="text-muted">{ev.notes || ''}</td>
                   <td><button onClick={() => deleteEvent(ev)} className="btn-icon delete-btn" title="Delete">✕</button></td>
                 </tr>

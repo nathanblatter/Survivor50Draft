@@ -3324,3 +3324,8 @@ body.has-sticky-bar .s50-launch { bottom: calc(5.25rem + env(safe-area-inset-bot
   .review-row { grid-template-columns: 1fr; }
   .ep-sticky-info span { display: none; }
 }
+
+/* Neutral (pre-draft) episodes: recorded for history, scored 0 */
+.neutral-badge { display: inline-block; margin-left: 0.4rem; padding: 0.05rem 0.4rem; border: 1px solid var(--border); border-radius: 999px; font-size: 0.65rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); vertical-align: middle; }
+.ep-neutral-toggle { margin: 0 0 1rem; padding: 0.6rem 0.8rem; border: 1px dashed var(--border); border-radius: 8px; background: rgba(240,199,94,0.05); }
+.extraction-subhead { margin: 1rem 0 0.4rem; font-size: 1rem; }

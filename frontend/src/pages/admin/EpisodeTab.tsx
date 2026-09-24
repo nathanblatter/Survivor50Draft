@@ -28,6 +28,8 @@ export default function EpisodeTab() {
   const [submitting, setSubmitting] = useState(false);
   const [showSources, setShowSources] = useState(false);
   const [showRare, setShowRare] = useState(false);
+  // Pre-draft episode: record every event for history, score them 0 (placement still counts).
+  const [neutral, setNeutral] = useState(false);
 
   // Tribal council scratch state
   const [bootId, setBootId] = useState(0);
@@ -42,6 +44,7 @@ export default function EpisodeTab() {
   const [extraction, setExtraction] = useState<Extraction | null>(null);
   const [accepted, setAccepted] = useState<Set<number>>(new Set());
   const [fixes, setFixes] = useState<Record<number, number>>({});
+  const [acceptedAlliances, setAcceptedAlliances] = useState<Set<number>>(new Set());
 
   // Lift the floating bug-report button above the sticky submit bar while this tab is open.
   useEffect(() => {
@@ -117,8 +120,10 @@ export default function EpisodeTab() {
       const result = await api.extractScoring(season.id, { episode, urls: urlList, text: pasted });
       setExtraction(result);
       setAccepted(new Set(result.proposals.map((p, i) => (p.problem || p.confidence === 'low') ? -1 : i).filter(i => i >= 0)));
+      setAcceptedAlliances(new Set((result.alliances || []).map((a, i) => (a.problem || a.confidence === 'low') ? -1 : i).filter(i => i >= 0)));
       setFixes({});
-      flash(`Claude proposed ${result.proposals.length} events. Tick the ones you agree with.`);
+      const nAll = (result.alliances || []).length;
+      flash(`Claude proposed ${result.proposals.length} events${nAll ? ` and ${nAll} alliance${nAll === 1 ? '' : 's'}` : ''}. Tick the ones you agree with.`);
     } catch (err: any) { flash(err.message, 'error'); } finally { setExtracting(false); }
   };
 
@@ -146,27 +151,49 @@ export default function EpisodeTab() {
     document.getElementById('ep-step-tribal')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  /** Alliances are game state, not scoring: write them straight away (the commissioner already ticked them). */
+  const saveAlliances = async () => {
+    if (!season || !extraction) return;
+    let n = 0;
+    try {
+      for (const [i, a] of extraction.alliances.entries()) {
+        if (!acceptedAlliances.has(i)) continue;
+        const ids = a.members.map(m => m.player_id).filter((x): x is number => Boolean(x));
+        if (a.status === 'dissolved') {
+          if (a.existing_id) { await api.updateAlliance(a.existing_id, { is_active: false, notes: a.evidence?.slice(0, 200) }); n++; }
+        } else if (a.existing_id) {
+          await api.updateAlliance(a.existing_id, { member_ids: ids, notes: a.evidence?.slice(0, 200) }); n++;
+        } else if (ids.length >= 2) {
+          await api.createAlliance(season.id, { name: a.name, formed_episode: episode, notes: a.evidence?.slice(0, 200), member_ids: ids }); n++;
+        }
+      }
+      setAcceptedAlliances(new Set());
+      flash(`${n} alliance${n === 1 ? '' : 's'} saved — see Game State.`);
+    } catch (err: any) { flash(err.message, 'error'); }
+  };
+
   // ── review & submit ──
   const reviewRows = useMemo(() => {
     const byPlayer = new Map<number, Pending[]>();
     for (const p of pending) { if (!byPlayer.has(p.player_id)) byPlayer.set(p.player_id, []); byPlayer.get(p.player_id)!.push(p); }
     return [...byPlayer.entries()].map(([pid, evs]) => {
-      const total = evs.reduce((s, e) => e.event_type === 'placement' ? s + (castCount + 1 - (e.placement || castCount)) : s + (ruleOf(e.event_type)?.points || 0) * e.count, 0);
+      const total = evs.reduce((s, e) => e.event_type === 'placement' ? s + (castCount + 1 - (e.placement || castCount)) : neutral ? s : s + (ruleOf(e.event_type)?.points || 0) * e.count, 0);
       return { player: playerById(pid), events: evs, total };
     }).sort((a, b) => b.total - a.total);
-  }, [pending, rules, players, castCount]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pending, rules, players, castCount, neutral]); // eslint-disable-line react-hooks/exhaustive-deps
   const queued = pending.reduce((n, p) => n + p.count, 0);
 
   const clearAll = () => { setPending([]); setBootId(0); setVotes({}); setVoters([]); setBootHadIdol(false); setRewardWinner(0); };
 
   const submit = async () => {
     if (!season || pending.length === 0) return;
-    if (!window.confirm(`Submit ${queued} scoring events for episode ${episode}? You can delete individual events afterwards in Scores.`)) return;
+    if (!window.confirm(`Submit ${queued} scoring events for episode ${episode}${neutral ? ' scored as NEUTRAL (0 points, placement still counts)' : ''}? You can delete individual events afterwards in Scores.`)) return;
     setSubmitting(true);
     try {
       const events: EventInput[] = pending.flatMap(p => Array.from({ length: p.count }, (_, i) => ({
         player_id: p.player_id, event_type: p.event_type, episode,
         notes: i === 0 ? (p.notes || null) : null,
+        ...(neutral ? { neutral: true } : {}),
         ...(p.event_type === 'placement' ? { placement: p.placement } : {}),
       })));
       await api.addScoringEvents(season.id, events);
@@ -182,8 +209,8 @@ export default function EpisodeTab() {
       } catch { /* tracker is secondary */ }
       if ((season.current_episode || 0) < episode) await api.updateSeason(season.id, { current_episode: episode });
       await refresh();
-      clearAll(); setExtraction(null);
-      flash(`Episode ${episode} logged — ${events.length} events. Recap it from the Recaps tab.`);
+      clearAll(); setExtraction(null); setNeutral(false);
+      flash(`Episode ${episode} logged — ${events.length} events${neutral ? ' (neutral, 0 pts)' : ''}. Recap it from the Recaps tab.`);
       setEpisode(episode + 1);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: any) { flash(err.message, 'error'); } finally { setSubmitting(false); }
@@ -212,6 +239,10 @@ export default function EpisodeTab() {
   return (
     <div className="admin-tab-content episode-tab">
       <p className="tab-intro">Work top to bottom. Every tap queues a scoring event; nothing is saved until you press <strong>Submit episode {episode}</strong> in the bar at the bottom. Change the episode number in the bar above.</p>
+      <label className="form-toggle ep-neutral-toggle">
+        <input type="checkbox" checked={neutral} onChange={e => setNeutral(e.target.checked)} />
+        <span><strong>Pre-draft episode</strong> — record everything for history but score it 0. The boot's placement points still count. (Use this when the league drafted after this episode aired.)</span>
+      </label>
 
       {/* 0. Sources */}
       <section className="ep-step optional">
@@ -261,8 +292,31 @@ export default function EpisodeTab() {
                     </tbody>
                   </table>
                 </div>
+                {extraction.alliances.length > 0 && (
+                  <>
+                    <h4 className="extraction-subhead">Alliances <span className="text-muted">(game state — saved separately, not scored)</span></h4>
+                    <div className="rules-table-container">
+                      <table className="log-table">
+                        <thead><tr><th></th><th>Alliance</th><th>Status</th><th>Members</th><th>Evidence</th><th>Conf.</th></tr></thead>
+                        <tbody>
+                          {extraction.alliances.map((a, i) => (
+                            <tr key={i} className={a.problem ? 'negative-row' : ''}>
+                              <td><input type="checkbox" checked={acceptedAlliances.has(i)} disabled={Boolean(a.problem) || (a.status === 'dissolved' && !a.existing_id)} onChange={e => setAcceptedAlliances(s => { const n = new Set(s); e.target.checked ? n.add(i) : n.delete(i); return n; })} /></td>
+                              <td>{a.name}{a.existing_id ? <span className="text-muted"> (known)</span> : null}</td>
+                              <td>{a.status}</td>
+                              <td>{a.members.map(m => m.player_id ? m.player_name : <span key={m.player_name} className="negative">{m.player_name}?</span>).reduce<React.ReactNode[]>((acc, x, j) => j ? [...acc, ', ', x] : [x], [])}{a.problem ? <div className="negative">{a.problem}</div> : null}</td>
+                              <td className="text-muted extraction-evidence">{a.evidence}</td>
+                              <td>{a.confidence}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
                 <div className="form-row-inline" style={{ marginTop: '0.75rem', alignItems: 'center' }}>
                   <button className="btn btn-primary" onClick={acceptExtraction} disabled={accepted.size === 0}>Queue {accepted.size} accepted events</button>
+                  {extraction.alliances.length > 0 && <button className="btn btn-secondary" onClick={saveAlliances} disabled={acceptedAlliances.size === 0}>Save {acceptedAlliances.size} alliance{acceptedAlliances.size === 1 ? '' : 's'}</button>}
                   <span className="text-muted" style={{ fontSize: '0.8rem' }}>{extraction.usage.model} · {extraction.usage.input_tokens.toLocaleString()} in / {extraction.usage.output_tokens.toLocaleString()} out</span>
                 </div>
               </div>
@@ -413,7 +467,7 @@ export default function EpisodeTab() {
       <div className="ep-sticky">
         <div className="ep-sticky-inner">
           <div className="ep-sticky-info">
-            <strong>Episode {episode}</strong>
+            <strong>Episode {episode}{neutral ? ' · neutral' : ''}</strong>
             <span>{queued} event{queued === 1 ? '' : 's'} queued · {reviewRows.length} players · {reviewRows.reduce((s, r) => s + r.total, 0).toFixed(2)} pts</span>
           </div>
           <div className="ep-sticky-actions">
