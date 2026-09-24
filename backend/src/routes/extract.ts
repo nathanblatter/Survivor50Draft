@@ -148,6 +148,8 @@ HOW TO APPLY THE RULES
 - placement: do NOT emit as an event; report boots in "eliminated" instead (the app computes placement).
 - finds_idol / finds_advantage: when found this episode. idol_advantage_play: when an idol or advantage is played. correct_idol_play: an idol that negated votes. idol_misplay: an idol played that negated nothing. vote_out_with_idol: each majority voter when the boot went home with an unplayed idol; voted_out_with_idol: the boot in that case.
 - makes_merge: every player still in the game at the merge episode. makes_jury: each player when they become a juror (first juror episode onward, one event each). goes_on_journey: each player sent on a journey/summit.
+- coin_flip_correct / coin_flip_wrong: the player who took the Open Era coin flip, by outcome (a wrong call also goes in "eliminated"). shot_in_the_dark_played: everyone who played a Shot in the Dark; shot_in_the_dark_hits: only if it landed. fails_journey_task: a journey/exile task or gamble the player lost (e.g. failed to earn the idol).
+- votes_with_minority: every player at tribal who voted for someone other than the person eliminated (players who played a Shot in the Dark forfeit their vote and get neither in_on_vote nor votes_with_minority). survives_rocks / drawn_out_by_rocks: rock draws only. jury_vote_received: count = jury votes each finalist got at Final Tribal Council. provides_food: a player shown catching or gathering food for the tribe. quits_or_medevac: in addition to reporting them in "eliminated".
 - Only use rules that exist in the list. Never invent players.
 
 ALLIANCES (tracked separately from scoring — they are not events)

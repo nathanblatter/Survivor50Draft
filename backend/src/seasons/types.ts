@@ -45,4 +45,16 @@ export const SURVIVOR_RULES: NonNullable<SeasonSeed['scoringRules']> = [
   { eventType: 'Win_fire', points: 2, description: 'Wins the fire-making challenge' },
   { eventType: 'Lose_fire', points: -1, description: 'Loses the fire-making challenge' },
   { eventType: 'get_taken_to_f3', points: 1, description: 'Taken to the final 3 by the final immunity winner' },
+  // Open Era additions (2026-09-23)
+  { eventType: 'coin_flip_correct', points: 5, description: 'Calls the coin flip correctly (safe, wins an idol, doubles the pot)' },
+  { eventType: 'coin_flip_wrong', points: -3, description: 'Calls the coin flip wrong and leaves the game' },
+  { eventType: 'shot_in_the_dark_played', points: -0.5, description: 'Plays their Shot in the Dark' },
+  { eventType: 'shot_in_the_dark_hits', points: 5, description: 'Shot in the Dark lands (safe)' },
+  { eventType: 'fails_journey_task', points: -0.5, description: 'Fails a journey / exile task or gamble' },
+  { eventType: 'votes_with_minority', points: -0.5, description: 'Votes for someone other than the person voted out' },
+  { eventType: 'survives_rocks', points: 2, description: 'Survives a rock draw' },
+  { eventType: 'drawn_out_by_rocks', points: -3, description: 'Drawn out of the game by rocks' },
+  { eventType: 'jury_vote_received', points: 1, description: 'Receives a jury vote at Final Tribal Council (per vote)' },
+  { eventType: 'provides_food', points: 0.5, description: 'Provides food for the tribe (fish, fruit, a catch)' },
+  { eventType: 'quits_or_medevac', points: -2, description: 'Quits or is medically evacuated' },
 ];
