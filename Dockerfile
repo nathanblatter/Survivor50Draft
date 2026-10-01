@@ -1,5 +1,5 @@
 # Stage 1: Build frontend and backend
-FROM node:20-alpine AS build
+FROM node:24-alpine AS build
 
 WORKDIR /app
 
@@ -22,7 +22,7 @@ RUN cd frontend && npm run build
 RUN cd backend && npm run build
 
 # Stage 2: Production
-FROM node:20-alpine
+FROM node:24-alpine
 
 WORKDIR /app
 
