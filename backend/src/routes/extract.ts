@@ -2,11 +2,18 @@ import { Router, Request, Response } from 'express';
 import Anthropic from '@anthropic-ai/sdk';
 import pool from '../db';
 import { authMiddleware } from '../middleware/auth';
+import { resolvePlayer, normalizeName as normalize } from '../lib/players';
+import { fetchWikitext, parseSeason, episodeFacts, describeFacts, wikipediaTitleFor } from '../lib/wikipedia';
+import { proposalsFromWikipedia, Proposal, Eliminated, RosterForWiki, WIKI_EVENT_TYPES } from '../lib/wikipediaProposals';
 
 /**
- * Scoring extraction: turn episode recaps (EW, Parade, Wikipedia, or pasted notes) into
- * *proposed* scoring events for the commissioner to review. Nothing is written here —
- * the admin confirms and the batch endpoint commits.
+ * Scoring extraction: turn an episode into *proposed* scoring events for the commissioner to review.
+ * Two sources, merged:
+ *   - Wikipedia's season page (voting history + challenge tables) parsed deterministically — votes,
+ *     tribe/individual wins, journeys, Shot in the Dark, fire-making, jury votes. Always right when present.
+ *   - Recaps (EW, Parade, pasted notes) read by Claude for the narrative-only things: idols found, food,
+ *     alliances. Claude is handed the Wikipedia facts as ground truth and told not to re-emit them.
+ * Nothing is written here — the admin confirms and the batch endpoint commits.
  */
 const router = Router();
 const MODEL = 'claude-opus-5';
@@ -75,31 +82,17 @@ interface Extracted {
   warnings: string[];
 }
 
-function normalize(s: string) {
-  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, '').trim();
-}
-
-/** Resolve a name from the article to a player id: exact, nickname, first name, then loose. */
-function resolvePlayer(name: string, players: { id: number; name: string; nickname: string | null }[]) {
-  const n = normalize(name);
-  if (!n) return null;
-  const exact = players.find(p => normalize(p.name) === n || (p.nickname && normalize(p.nickname) === n));
-  if (exact) return exact;
-  const first = players.filter(p => normalize(p.name).split(' ')[0] === n.split(' ')[0]);
-  if (first.length === 1) return first[0];
-  const loose = players.filter(p => normalize(p.name).includes(n) || n.includes(normalize(p.name).split(' ')[0]));
-  return loose.length === 1 ? loose[0] : null;
-}
-
 // POST /api/seasons/:seasonId/scoring/extract  { episode, urls?: string[], text?: string }
 router.post('/seasons/:seasonId/scoring/extract', authMiddleware, async (req: Request, res: Response) => {
   const seasonId = parseInt(req.params.seasonId as string);
-  const { episode, urls = [], text = '' } = req.body || {};
+  const { episode, urls = [], text = '', wikipedia = true } = req.body || {};
   if (!episode) { res.status(400).json({ error: 'episode is required' }); return; }
   const cleanUrls: string[] = (Array.isArray(urls) ? urls : []).map((u: string) => String(u).trim()).filter((u: string) => /^https?:\/\//i.test(u)).slice(0, 6);
-  if (cleanUrls.length === 0 && !String(text).trim()) { res.status(400).json({ error: 'Provide at least one article URL or pasted text' }); return; }
+  const useWiki = wikipedia !== false;
+  const useClaude = cleanUrls.length > 0 || Boolean(String(text).trim());
+  if (!useWiki && !useClaude) { res.status(400).json({ error: 'Provide an article URL or pasted text, or enable Wikipedia' }); return; }
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) { res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' }); return; }
+  if (useClaude && !apiKey) { res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' }); return; }
 
   try {
     const seasonRes = await pool.query(`
@@ -123,6 +116,51 @@ router.post('/seasons/:seasonId/scoring/extract', authMiddleware, async (req: Re
       LEFT JOIN players p ON p.id = am.player_id
       WHERE a.season_id = $1 GROUP BY a.id ORDER BY a.id`, [seasonId]);
     const knownAlliances: { id: number; name: string; is_active: boolean; formed_episode: number | null; members: string[] }[] = alliancesRes.rows;
+
+    // ── Wikipedia: deterministic facts ──
+    const warnings: string[] = [];
+    let wikiProposals: Proposal[] = [];
+    let wikiEliminated: Eliminated[] = [];
+    let wikiInfo: { title: string; facts: string } | null = null;
+    if (useWiki) {
+      const title = typeof wikipedia === 'string' && wikipedia.trim() ? wikipedia.trim() : wikipediaTitleFor(season.show_name, season.season_number);
+      try {
+        const wikitext = await fetchWikitext(title);
+        const wikiSeason = parseSeason(wikitext);
+        warnings.push(...wikiSeason.warnings);
+        const facts = episodeFacts(wikiSeason, Number(episode));
+        if (!facts || (!facts.tribals.length && !facts.reward.length && !facts.immunity.length)) {
+          warnings.push(`Wikipedia ("${title}") has nothing for episode ${episode} yet — editors usually fill the tables within a day of airing.`);
+        } else {
+          const outRes = await pool.query(`SELECT player_id, episode FROM scoring_events se JOIN players p ON p.id = se.player_id WHERE p.season_id = $1 AND se.event_type = 'placement'`, [seasonId]);
+          const outEp = new Map<number, number>(outRes.rows.map((r: any) => [r.player_id, r.episode]));
+          const idolRes = await pool.query('SELECT player_id FROM game_idols WHERE season_id = $1 AND is_active AND played_episode IS NULL', [seasonId]);
+          const idolHolders = new Set<number>(idolRes.rows.map((r: any) => r.player_id));
+          const rosterForWiki: RosterForWiki[] = players.map((p: any) => ({ id: p.id, name: p.name, nickname: p.nickname, tribe: p.tribe, out_episode: outEp.get(p.id) ?? null, has_idol: idolHolders.has(p.id) }));
+          const built = proposalsFromWikipedia(facts, wikiSeason.jury, rosterForWiki, rules.map((r: any) => r.event_type));
+          wikiProposals = built.proposals;
+          wikiEliminated = built.eliminated;
+          warnings.push(...built.warnings);
+          wikiInfo = { title, facts: describeFacts(facts, wikiSeason.jury) };
+        }
+      } catch (err: any) {
+        warnings.push(`Could not read Wikipedia ("${title}"): ${err.message}. Proposals below come from the recaps only.`);
+      }
+    }
+
+    if (!useClaude) {
+      res.json({
+        episode,
+        proposals: wikiProposals,
+        eliminated: wikiEliminated,
+        alliances: [],
+        summary: wikiInfo ? `Scored from Wikipedia's "${wikiInfo.title}" tables. Paste a recap to also catch idols, food and alliances.` : 'Nothing could be read from Wikipedia for this episode.',
+        warnings,
+        usage: { input_tokens: 0, output_tokens: 0, model: 'wikipedia' },
+        wikipedia: wikiInfo,
+      });
+      return;
+    }
 
     const roster = players.map((p: any) => `- ${p.name}${p.nickname ? ` ("${p.nickname}")` : ''} — current tribe ${p.tribe}${p.original_tribe && p.original_tribe !== p.tribe ? `, started on ${p.original_tribe}` : ''}${p.is_eliminated ? ` (already out, placed ${p.placement})` : ''}`).join('\n');
     const ruleList = rules.map((r: any) => `- ${r.event_type}: ${r.description} (${r.is_variable ? 'variable' : `${parseFloat(r.points) > 0 ? '+' : ''}${parseFloat(r.points)}`})`).join('\n');
@@ -151,6 +189,10 @@ HOW TO APPLY THE RULES
 - coin_flip_correct / coin_flip_wrong: the player who took the Open Era coin flip, by outcome (a wrong call also goes in "eliminated"). shot_in_the_dark_played: everyone who played a Shot in the Dark; shot_in_the_dark_hits: only if it landed. fails_journey_task: a journey/exile task or gamble the player lost (e.g. failed to earn the idol).
 - votes_with_minority: every player at tribal who voted for someone other than the person eliminated (players who played a Shot in the Dark forfeit their vote and get neither in_on_vote nor votes_with_minority). survives_rocks / drawn_out_by_rocks: rock draws only. jury_vote_received: count = jury votes each finalist got at Final Tribal Council. provides_food: a player shown catching or gathering food for the tribe. quits_or_medevac: in addition to reporting them in "eliminated".
 - Only use rules that exist in the list. Never invent players.
+${wikiInfo ? `
+VERIFIED FACTS FROM WIKIPEDIA (ground truth — trust these over the recaps if they disagree)
+${wikiInfo.facts}
+These are already scored: do NOT emit any of these event types: ${WIKI_EVENT_TYPES.join(', ')}. Do not list the boot in "eliminated" either (already known). Focus on what only the recap shows: idols/advantages found or played, food, coin flips, journey task outcomes, and alliances.` : ''}
 
 ALLIANCES (tracked separately from scoring — they are not events)
 Known alliances so far:
@@ -166,7 +208,7 @@ Report every alliance, voting bloc, pair or trio the sources describe as working
     }
     content.push({ type: 'text', text: `Extract every scoring event for Episode ${episode} from the sources above. Cover challenges (tribe and individual), tribal council votes (who received how many votes, who voted with the majority), idols and advantages found or played, journeys, merge/jury milestones if this is that episode, and who was eliminated. Also list the alliances described in the sources. Return the structured result.` });
 
-    const client = new Anthropic({ apiKey });
+    const client = new Anthropic({ apiKey: apiKey! });
     const tools: Anthropic.Beta.BetaToolUnion[] = cleanUrls.length
       ? [{ type: 'web_fetch_20260209', name: 'web_fetch', max_uses: cleanUrls.length + 2, max_content_tokens: 60000 }]
       : [];
@@ -201,23 +243,29 @@ Report every alliance, voting bloc, pair or trio the sources describe as working
       .map((b: any) => `Could not fetch a source (${b.content.error_code}). Paste its text instead.`);
 
     const ruleSet = new Set(rules.map((r: any) => r.event_type));
-    const proposals = parsed.events.map(e => {
-      const player = resolvePlayer(e.player, players);
-      const known = ruleSet.has(e.event_type);
-      return {
-        player_id: player?.id ?? null,
-        player_name: player?.name ?? e.player,
-        event_type: e.event_type,
-        count: Math.max(1, Math.min(20, e.count || 1)),
-        evidence: e.evidence,
-        confidence: e.confidence,
-        problem: !player ? `Unknown player "${e.player}"` : !known ? `Unknown rule "${e.event_type}"` : null,
-      };
-    });
-    const eliminated = parsed.eliminated.map(el => {
+    const wikiTypes = new Set(wikiInfo ? WIKI_EVENT_TYPES : []);
+    const claudeProposals: Proposal[] = parsed.events
+      .filter(e => !wikiTypes.has(e.event_type)) // Wikipedia already decided these
+      .map(e => {
+        const player = resolvePlayer(e.player, players);
+        const known = ruleSet.has(e.event_type);
+        return {
+          player_id: player?.id ?? null,
+          player_name: player?.name ?? e.player,
+          event_type: e.event_type,
+          count: Math.max(1, Math.min(20, e.count || 1)),
+          evidence: e.evidence,
+          confidence: e.confidence,
+          problem: !player ? `Unknown player "${e.player}"` : !known ? `Unknown rule "${e.event_type}"` : null,
+          source: 'claude' as const,
+        };
+      });
+    const proposals = [...wikiProposals, ...claudeProposals];
+    const claudeEliminated: Eliminated[] = parsed.eliminated.map(el => {
       const player = resolvePlayer(el.player, players);
       return { ...el, player_id: player?.id ?? null, player_name: player?.name ?? el.player };
     });
+    const eliminated = wikiEliminated.length ? wikiEliminated : claudeEliminated;
 
     const alliances = (parsed.alliances || []).map(a => {
       const members = a.members.map(name => {
@@ -243,8 +291,9 @@ Report every alliance, voting bloc, pair or trio the sources describe as working
       eliminated,
       alliances,
       summary: parsed.summary,
-      warnings: [...fetchErrors, ...(parsed.warnings || [])],
+      warnings: [...warnings, ...fetchErrors, ...(parsed.warnings || [])],
       usage: { input_tokens: message.usage.input_tokens, output_tokens: message.usage.output_tokens, model: message.model },
+      wikipedia: wikiInfo,
     });
   } catch (err: any) {
     if (err instanceof Anthropic.APIError) {

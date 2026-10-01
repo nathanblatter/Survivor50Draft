@@ -14,7 +14,7 @@ shows → seasons → leagues → teams → team_players. players/tribes/scoring
 Adding a season: `backend/src/seasons/<slug>.ts` + `npm run seed -- <slug>` (non-destructive, safe on prod), or Admin → Seasons.
 
 ## Admin
-`/admin` (password in `.env` ADMIN_PASSWORD). Context bar picks season / league / episode once; **Log Episode** builds a whole episode and submits it in one transaction (`POST /api/seasons/:id/scoring/events` with `events[]`). "Draft from recaps" calls `POST .../scoring/extract` (Claude Opus 5 reads article URLs/text and proposes events; nothing is written until the admin accepts).
+`/admin` (password in `.env` ADMIN_PASSWORD). Context bar picks season / league / episode once; **Log Episode** builds a whole episode and submits it in one transaction (`POST /api/seasons/:id/scoring/events` with `events[]`). "Pre-fill" calls `POST .../scoring/extract` `{episode, urls?, text?, wikipedia?=true}`: `backend/src/lib/wikipedia.ts` fetches the "<Show> <N>" Wikipedia page (API, redirects followed) and parses the season-summary + voting-history tables deterministically (votes, tribe/individual wins, journeys, Shot in the Dark, fire, jury); `wikipediaProposals.ts` turns them into proposals. Recap URLs/text go to Claude Opus 5 for the narrative-only events (idols, food, alliances), grounded on the Wikipedia facts. Nothing is written until the admin accepts. Narrative recaps alone miss votes (ep 2 of S51 was logged 6-0 instead of 6-4 that way) — always keep Wikipedia on.
 
 ## CI/CD
 - Push to `master` → `.github/workflows/deploy.yml` on the Mac Mini self-hosted runner pulls this checkout (`~/dev/Survivor50Draft`), rebuilds the Docker image (tsc gates inside the build), zero-downtime swaps the `app` container. Cloudflare tunnel fronts it.

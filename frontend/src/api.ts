@@ -108,7 +108,7 @@ export const api = {
   addScoringEvents: (seasonId: number, events: EventInput[]) =>
     post<ScoringEvent[]>(`/seasons/${seasonId}/scoring/events`, { events }),
   deleteScoringEvent: (id: number) => del(`/scoring/events/${id}`),
-  extractScoring: (seasonId: number, data: { episode: number; urls?: string[]; text?: string }) =>
+  extractScoring: (seasonId: number, data: { episode: number; urls?: string[]; text?: string; wikipedia?: boolean }) =>
     post<Extraction>(`/seasons/${seasonId}/scoring/extract`, data),
   setEpisodeNeutral: (seasonId: number, episode: number, is_neutral: boolean) =>
     patch<{ episode: number; is_neutral: boolean; changed: number }>(`/seasons/${seasonId}/scoring/episodes/${episode}`, { is_neutral }),

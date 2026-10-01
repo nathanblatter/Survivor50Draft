@@ -39,6 +39,7 @@ export default function EpisodeTab() {
   const [rewardWinner, setRewardWinner] = useState(0);
   // Extraction
   const [urls, setUrls] = useState('');
+  const [useWiki, setUseWiki] = useState(true);
   const [pasted, setPasted] = useState('');
   const [extracting, setExtracting] = useState(false);
   const [extraction, setExtraction] = useState<Extraction | null>(null);
@@ -114,16 +115,17 @@ export default function EpisodeTab() {
   const runExtraction = async () => {
     if (!season) return;
     const urlList = urls.split(/\s+/).map(s => s.trim()).filter(Boolean);
-    if (urlList.length === 0 && !pasted.trim()) { flash('Add at least one article link or paste text', 'error'); return; }
+    if (urlList.length === 0 && !pasted.trim() && !useWiki) { flash('Add an article link, paste text, or turn Wikipedia on', 'error'); return; }
     setExtracting(true); setExtraction(null);
     try {
-      const result = await api.extractScoring(season.id, { episode, urls: urlList, text: pasted });
+      const result = await api.extractScoring(season.id, { episode, urls: urlList, text: pasted, wikipedia: useWiki });
       setExtraction(result);
       setAccepted(new Set(result.proposals.map((p, i) => (p.problem || p.confidence === 'low') ? -1 : i).filter(i => i >= 0)));
       setAcceptedAlliances(new Set((result.alliances || []).map((a, i) => (a.problem || a.confidence === 'low') ? -1 : i).filter(i => i >= 0)));
       setFixes({});
       const nAll = (result.alliances || []).length;
-      flash(`Claude proposed ${result.proposals.length} events${nAll ? ` and ${nAll} alliance${nAll === 1 ? '' : 's'}` : ''}. Tick the ones you agree with.`);
+      const nWiki = result.proposals.filter(p => p.source === 'wikipedia').length;
+      flash(`${result.proposals.length} events proposed${nWiki ? ` (${nWiki} from Wikipedia)` : ''}${nAll ? ` and ${nAll} alliance${nAll === 1 ? '' : 's'}` : ''}. Tick the ones you agree with.`);
     } catch (err: any) { flash(err.message, 'error'); } finally { setExtracting(false); }
   };
 
@@ -248,7 +250,7 @@ export default function EpisodeTab() {
       <section className="ep-step optional">
         <header className="ep-step-head clickable" onClick={() => setShowSources(s => !s)}>
           <span className="ep-step-num">✨</span>
-          <div><h3>Let Claude pre-fill from recaps <span className="text-muted">(optional)</span></h3><p>Paste EW / Parade / Wikipedia links or article text. It proposes events; you tick what's right.</p></div>
+          <div><h3>Pre-fill from Wikipedia and recaps <span className="text-muted">(optional)</span></h3><p>Votes, challenge wins and journeys come straight from Wikipedia's tables; paste an EW / Parade recap for idols, food and alliances. You tick what's right.</p></div>
           <span className="ep-section-chev">{showSources ? '▾' : '▸'}</span>
         </header>
         {showSources && (
@@ -263,16 +265,21 @@ export default function EpisodeTab() {
                 <textarea className="form-textarea" rows={3} value={pasted} onChange={e => setPasted(e.target.value)} placeholder="Paste an article or your own notes" />
               </div>
             </div>
-            <button className="btn btn-secondary" onClick={runExtraction} disabled={extracting}>{extracting ? '🔮 Reading (about 30s)…' : '🔮 Propose scoring events'}</button>
-            {extracting && <div className="summary-loading"><div className="summary-spinner" /><p>Reading the sources and matching them to the rules…</p></div>}
+            <label className="form-toggle">
+              <input type="checkbox" checked={useWiki} onChange={e => setUseWiki(e.target.checked)} />
+              <span><strong>Pull from Wikipedia</strong> — the season page's voting history and challenge tables (usually updated within hours of airing). Works on its own, no article needed.</span>
+            </label>
+            <button className="btn btn-secondary" onClick={runExtraction} disabled={extracting}>{extracting ? '🔮 Reading…' : '🔮 Propose scoring events'}</button>
+            {extracting && <div className="summary-loading"><div className="summary-spinner" /><p>{urls.trim() || pasted.trim() ? 'Reading the sources and matching them to the rules (about 30s)…' : 'Reading Wikipedia…'}</p></div>}
             {extraction && (
               <div className="extraction-result">
                 <p className="summary-desc"><strong>Summary:</strong> {extraction.summary}</p>
+                {extraction.wikipedia && <details className="extraction-wiki"><summary>What Wikipedia had for episode {extraction.episode} ({extraction.wikipedia.title})</summary><pre>{extraction.wikipedia.facts}</pre></details>}
                 {extraction.warnings.length > 0 && <ul className="extraction-warnings">{extraction.warnings.map((w, i) => <li key={i}>⚠️ {w}</li>)}</ul>}
                 {extraction.eliminated.length > 0 && <p className="summary-desc"><strong>Eliminated:</strong> {extraction.eliminated.map(e => `${e.player_name} (${e.votes_received} votes, ${e.how})`).join('; ')}</p>}
                 <div className="rules-table-container">
                   <table className="log-table">
-                    <thead><tr><th></th><th>Player</th><th>Event</th><th>×</th><th>Evidence</th><th>Conf.</th></tr></thead>
+                    <thead><tr><th></th><th>Player</th><th>Event</th><th>×</th><th>Evidence</th><th>Source</th></tr></thead>
                     <tbody>
                       {extraction.proposals.map((p, i) => (
                         <tr key={i} className={p.problem ? 'negative-row' : ''}>
@@ -286,7 +293,7 @@ export default function EpisodeTab() {
                           <td>{has(p.event_type) ? eventLabel(p.event_type, rules) : <span className="negative">{p.event_type}</span>}</td>
                           <td>{p.count}</td>
                           <td className="text-muted extraction-evidence">{p.evidence}</td>
-                          <td>{p.confidence}</td>
+                          <td className="extraction-source">{p.source === 'wikipedia' ? '📘 Wikipedia' : `🔮 ${p.confidence}`}</td>
                         </tr>
                       ))}
                     </tbody>

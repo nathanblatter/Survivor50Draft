@@ -244,6 +244,8 @@ export interface ExtractionProposal {
   evidence: string;
   confidence: 'high' | 'medium' | 'low';
   problem: string | null;
+  /** Where the proposal came from: Wikipedia's tables (deterministic) or Claude reading the recaps. */
+  source?: 'wikipedia' | 'claude';
 }
 
 export interface ExtractionAlliance {
@@ -264,4 +266,6 @@ export interface Extraction {
   summary: string;
   warnings: string[];
   usage: { input_tokens: number; output_tokens: number; model: string };
+  /** Readable digest of what Wikipedia had for this episode (null when it was skipped or empty). */
+  wikipedia: { title: string; facts: string } | null;
 }

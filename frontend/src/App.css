@@ -3204,6 +3204,10 @@ a:hover { color: var(--gold-bright); }
 .extraction-result { margin-top: 1rem; }
 .extraction-warnings { list-style: none; margin: 0.5rem 0 1rem; color: var(--text-secondary); font-size: 0.85rem; display: flex; flex-direction: column; gap: 0.25rem; }
 .extraction-evidence { font-size: 0.78rem; max-width: 320px; }
+.extraction-source { font-size: 0.78rem; white-space: nowrap; }
+.extraction-wiki { margin: 0.5rem 0 0.75rem; font-size: 0.85rem; }
+.extraction-wiki summary { cursor: pointer; color: var(--text-muted, #888); }
+.extraction-wiki pre { white-space: pre-wrap; font-size: 0.78rem; margin: 0.4rem 0 0; padding: 0.6rem; background: rgba(0,0,0,0.25); border-radius: 6px; max-height: 320px; overflow: auto; }
 .vote-tally { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.4rem; }
 .vote-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; background: var(--bg-input); border-radius: var(--radius); padding: 0.3rem 0.5rem 0.3rem 0; }
 .vote-row.boot { outline: 1px solid var(--fire-red); }
