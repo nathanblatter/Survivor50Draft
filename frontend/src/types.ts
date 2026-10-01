@@ -70,6 +70,9 @@ export interface Player {
   total_points: number;
   team_id: number | null;
   pick_number?: number | null;
+  /** Present when players were fetched for a league: the fantasy team that drafted them. */
+  team_name?: string | null;
+  team_owner?: string | null;
   tribe_history?: TribeHistoryEntry[];
 }
 

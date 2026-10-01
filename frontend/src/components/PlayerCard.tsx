@@ -13,9 +13,11 @@ interface PlayerCardProps {
   showScore?: boolean;
   /** Small caption rendered under the name (e.g. "3 votes"). */
   badge?: string;
+  /** Don't show which fantasy team drafted the player (e.g. when the card already sits inside that team). */
+  hideTeam?: boolean;
 }
 
-export default function PlayerCard({ player, onClick, selected, compact, showScore, badge }: PlayerCardProps) {
+export default function PlayerCard({ player, onClick, selected, compact, showScore, badge, hideTeam }: PlayerCardProps) {
   const { getTribeColor } = useTribes();
   const tribeColor = getTribeColor(player.tribe);
   const displayName = player.nickname || player.name.split(' ')[0];
@@ -62,6 +64,11 @@ export default function PlayerCard({ player, onClick, selected, compact, showSco
               )}
             </div>
             {subline && <div className="player-seasons">{subline}</div>}
+            {!hideTeam && player.team_name && (
+              <div className="player-team" title={player.team_owner ? `Drafted by ${player.team_owner}` : undefined}>
+                <span className="player-team-icon">🏕</span> {player.team_name}
+              </div>
+            )}
           </>
         )}
         {badge && <div className="player-badge">{badge}</div>}

@@ -68,7 +68,7 @@ export default function TeamDetailPage() {
       <section className="section">
         <h2 className="section-title">Roster</h2>
         <div className="cast-grid">
-          {team.players.map(player => <PlayerCard key={player.id} player={player} showScore badge={player.pick_number ? `Pick #${player.pick_number}` : undefined} />)}
+          {team.players.map(player => <PlayerCard key={player.id} player={player} showScore hideTeam badge={player.pick_number ? `Pick #${player.pick_number}` : undefined} />)}
         </div>
       </section>
 

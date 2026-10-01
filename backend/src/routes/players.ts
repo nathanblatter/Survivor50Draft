@@ -16,7 +16,7 @@ const PLAYER_SELECT = `
 `;
 
 // ── GET /api/seasons/:seasonId/players ──
-// Optional ?league_id= adds team_id for that league's draft.
+// Optional ?league_id= adds team_id / team_name / team_owner / pick_number for that league's draft.
 router.get('/seasons/:seasonId/players', async (req: Request, res: Response) => {
   try {
     const { seasonId } = req.params;
@@ -30,14 +30,14 @@ router.get('/seasons/:seasonId/players', async (req: Request, res: Response) => 
     let rows = result.rows.map((r: any) => ({ ...r, team_id: null }));
     if (leagueId) {
       const tp = await pool.query(
-        `SELECT tp.player_id, tp.team_id, tp.pick_number FROM team_players tp
+        `SELECT tp.player_id, tp.team_id, tp.pick_number, t.name as team_name, t.owner_name as team_owner FROM team_players tp
          JOIN teams t ON t.id = tp.team_id WHERE t.league_id = $1`,
         [leagueId]
       );
       const byPlayer = new Map<number, any>(tp.rows.map((r: any) => [r.player_id, r]));
       rows = rows.map((r: any) => {
         const pick = byPlayer.get(r.id);
-        return { ...r, team_id: pick?.team_id ?? null, pick_number: pick?.pick_number ?? null };
+        return { ...r, team_id: pick?.team_id ?? null, pick_number: pick?.pick_number ?? null, team_name: pick?.team_name ?? null, team_owner: pick?.team_owner ?? null };
       });
     }
     res.json(rows);
