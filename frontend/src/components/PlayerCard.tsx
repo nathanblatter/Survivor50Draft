@@ -1,5 +1,7 @@
+import { Link } from 'react-router-dom';
 import { Player } from '../types';
 import { useTribes } from '../context/TribeContext';
+import { useAppContext } from '../context/AppContext';
 
 export function getInitials(name: string): string {
   return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
@@ -19,6 +21,7 @@ interface PlayerCardProps {
 
 export default function PlayerCard({ player, onClick, selected, compact, showScore, badge, hideTeam }: PlayerCardProps) {
   const { getTribeColor } = useTribes();
+  const { leagueBase } = useAppContext();
   const tribeColor = getTribeColor(player.tribe);
   const displayName = player.nickname || player.name.split(' ')[0];
   const history = player.tribe_history || [];
@@ -65,9 +68,20 @@ export default function PlayerCard({ player, onClick, selected, compact, showSco
             </div>
             {subline && <div className="player-seasons">{subline}</div>}
             {!hideTeam && player.team_name && (
-              <div className="player-team" title={player.team_owner ? `Drafted by ${player.team_owner}` : undefined}>
-                <span className="player-team-icon">🏕</span> {player.team_name}
-              </div>
+              leagueBase && player.team_id ? (
+                <Link
+                  to={`${leagueBase}/team/${player.team_id}`}
+                  className="player-team"
+                  title={player.team_owner ? `Drafted by ${player.team_owner} — open team` : 'Open team'}
+                  onClick={e => e.stopPropagation()}
+                >
+                  <span className="player-team-icon">🏕</span> {player.team_name}
+                </Link>
+              ) : (
+                <div className="player-team" title={player.team_owner ? `Drafted by ${player.team_owner}` : undefined}>
+                  <span className="player-team-icon">🏕</span> {player.team_name}
+                </div>
+              )
             )}
           </>
         )}

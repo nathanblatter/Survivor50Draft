@@ -748,6 +748,12 @@ a:hover { color: var(--gold-bright); }
   text-overflow: ellipsis;
 }
 .player-team-icon { font-size: 0.8rem; }
+a.player-team { text-decoration: none; cursor: pointer; transition: background 0.15s, border-color 0.15s; }
+a.player-team:hover, a.player-team:focus-visible {
+  background: color-mix(in srgb, var(--tribe-color) 35%, transparent);
+  border-color: var(--tribe-color);
+  text-decoration: underline;
+}
 .player-score {
   font-family: var(--font-display);
   font-size: 1.1rem;
