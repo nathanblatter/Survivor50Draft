@@ -119,7 +119,7 @@ export default function HomePage() {
             {teams.slice(0, 8).map((team, idx) => (
               <Link to={`${leagueBase}/team/${team.id}`} key={team.id} className="standing-row">
                 <span className="standing-rank">{idx === 0 && season.is_complete ? '👑' : `#${idx + 1}`}</span>
-                <span className="standing-name">{team.name}</span>
+                <span className="standing-name">{team.week && <span className="team-mood" title={team.week.label}>{team.week.emoji} </span>}{team.name}</span>
                 <span className="standing-owner">{team.owner_name}</span>
                 <span className="standing-score">{team.total_score.toFixed(1)}</span>
               </Link>

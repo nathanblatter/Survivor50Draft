@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import pool from '../db';
 import { authMiddleware } from '../middleware/auth';
+import { teamWeeks } from '../lib/teamMood';
 
 const router = Router();
 
@@ -25,11 +26,12 @@ export async function getTeamsWithScores(leagueId: number) {
     if (!byTeam.has(p.team_id)) byTeam.set(p.team_id, []);
     byTeam.get(p.team_id)!.push(p);
   }
+  const weeks = await teamWeeks(leagueId);
 
   const teams = teamsResult.rows.map((team: any) => {
     const players = byTeam.get(team.id) || [];
     const total_score = players.reduce((sum: number, p: any) => sum + (p.total_points || 0), 0);
-    return { ...team, players, total_score };
+    return { ...team, players, total_score, week: weeks.get(team.id) ?? null };
   });
   teams.sort((a: any, b: any) => b.total_score - a.total_score);
   return teams;
@@ -98,11 +100,13 @@ router.get('/teams/:id', async (req: Request, res: Response) => {
     `, [id]);
     const recapResult = await pool.query('SELECT recap, generated_at FROM team_recaps WHERE team_id = $1', [id]);
     const total_score = playersResult.rows.reduce((sum: number, p: any) => sum + (p.total_points || 0), 0);
+    const weeks = await teamWeeks(teamResult.rows[0].league_id);
     res.json({
       ...teamResult.rows[0],
       players: playersResult.rows,
       events: eventsResult.rows,
       total_score,
+      week: weeks.get(teamResult.rows[0].id) ?? null,
       recap: recapResult.rows[0]?.recap || null,
     });
   } catch (err) {

@@ -72,14 +72,14 @@ export default function PlayerCard({ player, onClick, selected, compact, showSco
                 <Link
                   to={`${leagueBase}/team/${player.team_id}`}
                   className="player-team"
-                  title={player.team_owner ? `Drafted by ${player.team_owner} — open team` : 'Open team'}
+                  title={[player.team_owner ? `Drafted by ${player.team_owner}` : null, player.team_mood, 'Open team'].filter(Boolean).join(' · ')}
                   onClick={e => e.stopPropagation()}
                 >
-                  <span className="player-team-icon">🏕</span> {player.team_name}
+                  <span className="player-team-icon">{player.team_emoji || '🏕'}</span> {player.team_name}
                 </Link>
               ) : (
-                <div className="player-team" title={player.team_owner ? `Drafted by ${player.team_owner}` : undefined}>
-                  <span className="player-team-icon">🏕</span> {player.team_name}
+                <div className="player-team" title={[player.team_owner ? `Drafted by ${player.team_owner}` : null, player.team_mood].filter(Boolean).join(' · ') || undefined}>
+                  <span className="player-team-icon">{player.team_emoji || '🏕'}</span> {player.team_name}
                 </div>
               )
             )}

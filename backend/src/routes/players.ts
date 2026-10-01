@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import pool from '../db';
 import { authMiddleware } from '../middleware/auth';
+import { teamWeeks } from '../lib/teamMood';
 
 const router = Router();
 
@@ -35,9 +36,11 @@ router.get('/seasons/:seasonId/players', async (req: Request, res: Response) => 
         [leagueId]
       );
       const byPlayer = new Map<number, any>(tp.rows.map((r: any) => [r.player_id, r]));
+      const weeks = await teamWeeks(leagueId);
       rows = rows.map((r: any) => {
         const pick = byPlayer.get(r.id);
-        return { ...r, team_id: pick?.team_id ?? null, pick_number: pick?.pick_number ?? null, team_name: pick?.team_name ?? null, team_owner: pick?.team_owner ?? null };
+        const week = pick ? weeks.get(pick.team_id) : null;
+        return { ...r, team_id: pick?.team_id ?? null, pick_number: pick?.pick_number ?? null, team_name: pick?.team_name ?? null, team_owner: pick?.team_owner ?? null, team_emoji: week?.emoji ?? null, team_mood: week?.label ?? null };
       });
     }
     res.json(rows);

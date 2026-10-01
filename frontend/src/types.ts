@@ -73,7 +73,19 @@ export interface Player {
   /** Present when players were fetched for a league: the fantasy team that drafted them. */
   team_name?: string | null;
   team_owner?: string | null;
+  /** The team's weekly mood emoji + label (see TeamWeek). */
+  team_emoji?: string | null;
+  team_mood?: string | null;
   tribe_history?: TribeHistoryEntry[];
+}
+
+/** How a team did in the latest scored episode, ranked within its league. */
+export interface TeamWeek {
+  episode: number | null;
+  points: number;
+  rank: number | null;
+  emoji: string;
+  label: string;
 }
 
 export interface Team {
@@ -84,6 +96,7 @@ export interface Team {
   draft_order: number | null;
   players: Player[];
   total_score: number;
+  week?: TeamWeek | null;
 }
 
 export interface TeamDetail extends Team {

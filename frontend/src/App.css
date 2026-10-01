@@ -748,6 +748,8 @@ a:hover { color: var(--gold-bright); }
   text-overflow: ellipsis;
 }
 .player-team-icon { font-size: 0.8rem; }
+.team-mood { cursor: help; }
+.team-week-pts { color: var(--text-muted); font-size: 0.85em; }
 a.player-team { text-decoration: none; cursor: pointer; transition: background 0.15s, border-color 0.15s; }
 a.player-team:hover, a.player-team:focus-visible {
   background: color-mix(in srgb, var(--tribe-color) 35%, transparent);

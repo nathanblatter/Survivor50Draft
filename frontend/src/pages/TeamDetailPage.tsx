@@ -54,8 +54,8 @@ export default function TeamDetailPage() {
       <Link to={`${leagueBase}/scoreboard`} className="back-link">&larr; Back to Scoreboard</Link>
 
       <div className="team-detail-header">
-        <h1 className="page-title">{team.name}</h1>
-        <p className="team-owner-name">Manager: {team.owner_name}</p>
+        <h1 className="page-title">{team.week && <span className="team-mood" title={team.week.label}>{team.week.emoji} </span>}{team.name}</h1>
+        <p className="team-owner-name">Manager: {team.owner_name}{team.week?.episode ? <span className="team-week-pts"> · {team.week.label}</span> : null}</p>
         <div className="team-total-score">
           <span className="big-score">{team.total_score.toFixed(1)}</span>
           <span className="score-label">Total Points</span>

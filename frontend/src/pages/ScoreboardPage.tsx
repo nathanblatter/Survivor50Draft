@@ -76,8 +76,8 @@ export default function ScoreboardPage() {
                     <span className="rank-number">#{idx + 1}</span>
                   </div>
                   <div className="team-header">
-                    <h3 className="team-name">{team.name}</h3>
-                    <p className="team-owner">{team.owner_name}</p>
+                    <h3 className="team-name">{team.week && <span className="team-mood" title={team.week.label}>{team.week.emoji}</span>} {team.name}</h3>
+                    <p className="team-owner">{team.owner_name}{team.week?.episode ? <span className="team-week-pts" title={team.week.label}> · {team.week.points >= 0 ? '+' : ''}{team.week.points.toFixed(1)} this week</span> : null}</p>
                   </div>
                   <div className="team-score">
                     <span className="score-value">{team.total_score.toFixed(1)}</span>
