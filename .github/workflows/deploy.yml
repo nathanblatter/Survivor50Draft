@@ -9,8 +9,12 @@ jobs:
     steps:
       - name: Deploy
         run: |
-          cd /Users/nathanblatter/dev/Survivor50Draft
-          git pull origin master
+          # Deploy from a dedicated checkout, never from the dev working tree in ~/dev
+          # (which may be on another branch or carry local changes). The checkout is
+          # disposable: hard-reset to origin/master. Runtime files (.env, secrets/) live there too.
+          cd /Users/nathanblatter/deploy/Survivor50Draft
+          git fetch origin master
+          git reset --hard origin/master
 
           # Build new image
           docker compose build --no-cache app
