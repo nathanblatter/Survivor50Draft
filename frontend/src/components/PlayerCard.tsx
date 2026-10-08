@@ -33,7 +33,7 @@ export default function PlayerCard({ player, onClick, selected, compact, showSco
 
   return (
     <div
-      className={`player-card ${compact ? 'compact' : ''} ${selected ? 'selected' : ''} ${player.is_eliminated ? 'eliminated' : ''} ${isWinner ? 'winner' : ''} ${onClick ? 'clickable' : ''}`}
+      className={`player-card ${compact ? 'compact' : ''} ${selected ? 'selected' : ''} ${player.is_eliminated ? 'eliminated' : ''} ${player.quit ? 'quitter' : ''} ${isWinner ? 'winner' : ''} ${onClick ? 'clickable' : ''}`}
       onClick={onClick}
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}

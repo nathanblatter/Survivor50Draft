@@ -713,6 +713,7 @@ a:hover { color: var(--gold-bright); }
   letter-spacing: 4px;
 }
 /* The walk of shame: a rubber stamp slapped across anyone who quit. */
+.player-card.eliminated.quitter { opacity: 0.85; filter: grayscale(0.7); }
 .eliminated-overlay.quitter {
   background: rgba(60, 0, 0, 0.72);
   letter-spacing: 0;
