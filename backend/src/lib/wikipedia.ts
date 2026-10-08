@@ -287,7 +287,15 @@ function parseSeasonSummary(wikitext: string, warnings: string[]): WikiEpisodeFa
   const cNo = col(/^no\.?$/), cTitle = col(/^title$/), cDate = col(/air ?date/), cReward = col(/^reward$/), cImm = col(/^immunity$/),
     cJourney = col(/journey|exile/), cPlayer = header.length - 1;
   const byEp = new Map<number, WikiEpisodeFacts>();
-  const seen = new Set<Cell>();
+  // A cell can span rows (one challenge covering two tribal rows) and columns (a combined
+  // reward/immunity challenge is one cell across both columns), so dedupe per column, not per cell.
+  const seenIn = new Map<Cell, Set<number>>();
+  const seenAt = (cell: Cell, c: number) => {
+    const cols = seenIn.get(cell) ?? new Set<number>();
+    if (cols.has(c)) return true;
+    cols.add(c); seenIn.set(cell, cols);
+    return false;
+  };
   for (const row of table.slice(headerIdx + 1)) {
     const noCell = row[cNo];
     const ep = parseInt(noCell?.text ?? '');
@@ -301,21 +309,18 @@ function parseSeasonSummary(wikitext: string, warnings: string[]): WikiEpisodeFa
     if (cDate >= 0 && row[cDate]) f.airDate = row[cDate].text || f.airDate;
     const take = (c: number, into: WikiWinner[]) => {
       const cell = row[c];
-      if (!cell || seen.has(cell)) return;
-      seen.add(cell);
+      if (!cell || seenAt(cell, c)) return;
       into.push(...parseWinnerCell(cell));
       for (const n of footnotes(cell.raw)) f!.notes.push(n);
     };
     if (cReward >= 0) take(cReward, f.reward);
     if (cImm >= 0) take(cImm, f.immunity);
-    if (cJourney >= 0 && row[cJourney] && !seen.has(row[cJourney])) {
-      seen.add(row[cJourney]);
+    if (cJourney >= 0 && row[cJourney] && !seenAt(row[cJourney], cJourney)) {
       for (const w of parseWinnerCell(row[cJourney])) f.journeys.push(...w.players, ...w.guests);
       for (const n of footnotes(row[cJourney].raw)) f.notes.push(n);
     }
     const pc = row[cPlayer];
-    if (pc && !seen.has(pc)) {
-      seen.add(pc);
+    if (pc && !seenAt(pc, cPlayer)) {
       f.eliminated.push(...splitNames(pc.text));
       for (const n of footnotes(pc.raw)) f.notes.push(n);
     }
