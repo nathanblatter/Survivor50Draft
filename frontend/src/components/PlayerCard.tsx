@@ -46,7 +46,11 @@ export default function PlayerCard({ player, onClick, selected, compact, showSco
         ) : (
           <span className="avatar-initials">{getInitials(player.name)}</span>
         )}
-        {player.is_eliminated && <div className="eliminated-overlay">OUT</div>}
+        {player.is_eliminated && (
+          player.quit
+            ? <div className="eliminated-overlay quitter" title="Quit the game"><span className="quitter-stamp">QUITTER</span></div>
+            : <div className="eliminated-overlay">OUT</div>
+        )}
         {isWinner && <div className="winner-overlay">SOLE SURVIVOR</div>}
       </div>
       <div className="player-info">

@@ -12,7 +12,11 @@ const PLAYER_SELECT = `
       (SELECT json_agg(json_build_object('tribe_name', t.name, 'phase', th.phase, 'episode', th.episode) ORDER BY th.id)
        FROM tribe_history th JOIN tribes t ON t.id = th.tribe_id WHERE th.player_id = p.id),
       '[]'::json
-    ) as tribe_history
+    ) as tribe_history,
+    EXISTS (
+      SELECT 1 FROM scoring_events se
+      WHERE se.player_id = p.id AND se.event_type = 'quits_or_medevac' AND se.notes ~* 'quit' AND se.notes !~* 'evac'
+    ) as quit
   FROM players p
 `;
 

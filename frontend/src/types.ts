@@ -67,6 +67,8 @@ export interface Player {
   hometown?: string | null;
   is_eliminated: boolean;
   placement: number | null;
+  /** Left the game by quitting (derived from the quits_or_medevac event) — the cast page shames them for it. */
+  quit?: boolean;
   total_points: number;
   team_id: number | null;
   pick_number?: number | null;
