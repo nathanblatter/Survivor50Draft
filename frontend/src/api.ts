@@ -29,10 +29,33 @@ const post = <T>(path: string, body?: unknown) => request<T>(path, { method: 'PO
 const patch = <T>(path: string, body: unknown) => request<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
 const del = <T = { success: true }>(path: string) => request<T>(path, { method: 'DELETE' });
 
+/** Auth routes answer `{ error, message }`; surface the human message. */
+async function authPost<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({})) as { error?: string; message?: string };
+    throw new Error(err.message || err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 export const api = {
-  // Auth
-  login: (password: string) => post<{ token: string }>('/auth/login', { password }),
+  // Auth (admin signs in through Squawk with the owner passkey; see LoginPage)
   verifyToken: () => request<{ valid: boolean }>('/auth/verify'),
+  auth: {
+    config: () => request<{ enabled: boolean }>('/auth/config'),
+    /** Browser navigation target: 302s to Squawk /oauth/authorize. */
+    startUrl: `${API_BASE}/auth/start`,
+    ownerBegin: (login_challenge: string) =>
+      authPost<{ challenge_id: string; options: { publicKey: PublicKeyCredentialRequestOptionsJSON } }>(
+        '/auth/owner/begin', { login_challenge }),
+    ownerFinish: (challenge_id: string, credential: unknown) =>
+      authPost<{ redirect_to: string }>('/auth/owner/finish', { challenge_id, credential }),
+  },
 
   // Landing / archive
   getFeatured: () => request<Featured | null>('/featured'),

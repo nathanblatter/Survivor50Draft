@@ -170,12 +170,6 @@ export async function initDB() {
         UNIQUE(alliance_id, player_id)
       );
 
-      CREATE TABLE IF NOT EXISTS user_sessions (
-        id SERIAL PRIMARY KEY,
-        user_id INT,
-        logged_in_at TIMESTAMPTZ DEFAULT NOW()
-      );
-
       -- Cached AI end-of-season recaps (one per team)
       CREATE TABLE IF NOT EXISTS team_recaps (
         team_id INTEGER PRIMARY KEY REFERENCES teams(id) ON DELETE CASCADE,
@@ -200,6 +194,8 @@ export async function initDB() {
       ALTER TABLE draft_state ADD COLUMN IF NOT EXISTS pick_deadline TIMESTAMPTZ;
       ALTER TABLE draft_state ADD COLUMN IF NOT EXISTS seconds_per_pick INTEGER;
       ALTER TABLE scoring_events ADD COLUMN IF NOT EXISTS is_neutral BOOLEAN NOT NULL DEFAULT FALSE;
+      -- Admin auth moved to Squawk (2026-10-16); nothing ever wrote this table.
+      DROP TABLE IF EXISTS user_sessions;
     `);
 
     // Older databases created these FKs without ON DELETE CASCADE; deleting a season/league needs it.

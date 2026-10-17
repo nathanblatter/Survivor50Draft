@@ -4,7 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import dotenv from 'dotenv';
 import { initDB } from './db';
-import authRouter, { initAuth } from './routes/auth';
+import authRouter from './routes/auth';
 import playersRouter from './routes/players';
 import teamsRouter from './routes/teams';
 import draftRouter from './routes/draft';
@@ -140,7 +140,6 @@ app.get('*', (_req, res) => {
 
 async function start() {
   await initDB();
-  await initAuth();
   app.listen(PORT, () => {
     console.log(`Fantasy Draft API running on port ${PORT}`);
   });

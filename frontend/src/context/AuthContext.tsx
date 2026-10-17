@@ -3,14 +3,15 @@ import { api, TOKEN_KEY } from '../api';
 
 interface AuthContextType {
   isAdmin: boolean;
-  login: (password: string) => Promise<void>;
+  /** Store the admin JWT handed back by /api/auth/callback (via /login#token=). */
+  login: (token: string) => void;
   logout: () => void;
   loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
   isAdmin: false,
-  login: async () => {},
+  login: () => {},
   logout: () => {},
   loading: true,
 });
@@ -34,8 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const login = async (password: string) => {
-    const { token } = await api.login(password);
+  const login = (token: string) => {
     localStorage.setItem(TOKEN_KEY, token);
     setIsAdmin(true);
   };
