@@ -58,4 +58,5 @@ export const SURVIVOR_RULES: NonNullable<SeasonSeed['scoringRules']> = [
   { eventType: 'provides_food', points: 0.5, description: 'Provides food for the tribe (fish, fruit, a catch)' },
   { eventType: 'quits_or_medevac', points: -2, description: 'Quits or is medically evacuated' },
   { eventType: 'wastes_advantage', points: -1.5, description: 'Wastes an advantage: lets it expire, loses it, or gives it to someone who burns it' },
+  { eventType: 'vote_negated', points: 0.75, description: 'A vote cast against the player is negated by an idol, advantage or Shot in the Dark (per vote)' },
 ];

@@ -181,7 +181,7 @@ ${ruleList}
 HOW TO APPLY THE RULES
 - tribe_wins_immunity / tribe_wins_reward: one event for EVERY member of the winning tribe(s) who played (list each player). If two tribes are safe in a three-tribe format, both tribes win immunity.
 - wins_individual_immunity: the necklace winner(s). wins_individual_reward: the individual reward challenge winner. chosen_for_reward: players the winner brought along.
-- receives_votes: count = number of votes cast against that player at tribal council (all players who received votes, not only the boot).
+- receives_votes: count = number of votes cast against that player at tribal council (all players who received votes, not only the boot). vote_negated: count = votes against the player that were negated by an idol, advantage or Shot in the Dark (every player the idol/shot covered, e.g. both members of a pair).
 - in_on_vote: every player who voted for the person who was actually eliminated (the majority). Do not include the eliminated player.
 - placement: do NOT emit as an event; report boots in "eliminated" instead (the app computes placement).
 - finds_idol / finds_advantage: when found this episode. idol_advantage_play: when an idol or advantage is played. correct_idol_play: an idol that negated votes. idol_misplay: an idol played that negated nothing. vote_out_with_idol: each majority voter when the boot went home with an unplayed idol; voted_out_with_idol: the boot in that case. wastes_advantage: a player whose advantage expires unused, is lost, or is handed to someone who lets it expire (both the giver and the holder).
